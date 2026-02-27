@@ -1,0 +1,97 @@
+{
+  "name": "featurefly",
+  "version": "0.1.0",
+  "description": "Lightweight, framework-agnostic Feature Flags SDK with built-in caching, retry, circuit breaker, targeting, A/B testing, and real-time streaming",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc && tsc --project tsconfig.esm.json",
+    "dev": "tsc --watch",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build && npm test"
+  },
+  "keywords": [
+    "feature-flags",
+    "feature-toggles",
+    "featurefly",
+    "sdk",
+    "typescript",
+    "framework-agnostic",
+    "feature-management",
+    "ab-testing",
+    "gradual-rollout",
+    "circuit-breaker",
+    "targeting",
+    "streaming",
+    "edge-evaluation",
+    "react-hooks",
+    "vue-composables"
+  ],
+  "author": "Arrua Platform Team",
+  "license": "MIT",
+  "homepage": "https://github.com/arrua/featurefly#readme",
+  "bugs": {
+    "url": "https://github.com/arrua/featurefly/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arrua/featurefly.git"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.0.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.28",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0",
+    "vue": "^3.5.29"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "vue": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react/index.js",
+      "require": "./dist/react/index.js",
+      "types": "./dist/react/index.d.ts"
+    },
+    "./vue": {
+      "import": "./dist/vue/index.js",
+      "require": "./dist/vue/index.js",
+      "types": "./dist/vue/index.d.ts"
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

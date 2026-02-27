@@ -1,0 +1,23 @@
+# Source code
+src/
+
+# Test files
+**/__tests__/
+**/*.spec.ts
+**/*.test.ts
+
+# Config files
+tsconfig.json
+tsconfig.esm.json
+jest.config.js
+.eslintrc*
+.editorconfig
+
+# Development files
+node_modules/
+.git/
+.gitignore
+.npmrc
+
+# Other
+*.map
