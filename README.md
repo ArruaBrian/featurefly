@@ -321,6 +321,22 @@ const client = new FeatureFlagsClient({
     "critical-feature": false,
   },
 
+  // Custom static headers merged into every request
+  headers: {
+    "x-workspace-id": "ws-123",
+    "x-custom-header": "value",
+  },
+
+  // Dynamic request interceptor — invoked before every HTTP call
+  // Perfect for JWT auth where tokens rotate over time
+  requestInterceptor: () => ({
+    Authorization: `Bearer ${getAccessToken()}`,
+    "x-user-id": getUserId(),
+  }),
+
+  // Send cookies with cross-origin requests (default: false)
+  withCredentials: true,
+
   // Real-time updates via SSE (default: false)
   streaming: true, // or { reconnectDelayMs: 2000 }
 

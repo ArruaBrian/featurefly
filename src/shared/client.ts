@@ -125,11 +125,27 @@ export class FeatureFlagsClient {
     this.http = axios.create({
       baseURL: config.baseUrl,
       timeout: config.timeout ?? DEFAULT_TIMEOUT,
+      withCredentials: config.withCredentials ?? false,
       headers: {
         'Content-Type': 'application/json',
         ...(config.apiKey && { Authorization: `Bearer ${config.apiKey}` }),
+        ...config.headers,
       },
     });
+
+    // Request interceptor for dynamic headers (e.g. JWT tokens that rotate)
+    if (config.requestInterceptor) {
+      const interceptor = config.requestInterceptor;
+      this.http.interceptors.request.use(async (reqConfig) => {
+        try {
+          const dynamicHeaders = await interceptor();
+          Object.assign(reqConfig.headers, dynamicHeaders);
+        } catch (e) {
+          this.logger.warn('requestInterceptor threw — request proceeds without dynamic headers', e);
+        }
+        return reqConfig;
+      });
+    }
 
     // Edge Evaluator Initialization
     if (config.edgeDocument) {

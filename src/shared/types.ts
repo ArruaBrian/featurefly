@@ -236,12 +236,27 @@ export interface RetryConfig {
 }
 
 /**
+ * Callback invoked before every HTTP request.
+ * Return a headers object to merge into the request.
+ * Useful for dynamic auth (JWT, session tokens) that change over time.
+ *
+ * @example
+ * ```ts
+ * requestInterceptor: () => ({
+ *   Authorization: `Bearer ${getToken()}`,
+ *   'x-workspace-id': getWorkspaceId(),
+ * })
+ * ```
+ */
+export type RequestInterceptor = () => Record<string, string> | Promise<Record<string, string>>;
+
+/**
  * Main SDK configuration
  */
 export interface FeatureFlagsConfig {
   /** Base URL of the feature flags API */
   baseUrl: string;
-  /** Optional API key for authentication */
+  /** Optional API key for authentication (sent as `Authorization: Bearer <apiKey>`) */
   apiKey?: string;
   /** HTTP request timeout in ms (default: 10000) */
   timeout?: number;
@@ -261,6 +276,34 @@ export interface FeatureFlagsConfig {
   localOverrides?: Record<string, FlagValue>;
   /** Default values when the server is unreachable and no cache exists */
   fallbackDefaults?: Record<string, FlagValue>;
+
+  /**
+   * Custom HTTP headers merged into every request.
+   * Useful for static auth tokens, workspace IDs, or custom metadata.
+   *
+   * @example
+   * ```ts
+   * headers: { 'x-workspace-id': 'ws-123', 'x-custom': 'value' }
+   * ```
+   */
+  headers?: Record<string, string>;
+
+  /**
+   * Dynamic request interceptor invoked before every HTTP request.
+   * Returns headers to merge into the request. Supports async for token refresh flows.
+   * Takes precedence over static `headers` for overlapping keys.
+   *
+   * @example
+   * ```ts
+   * requestInterceptor: () => ({
+   *   Authorization: `Bearer ${Cookies.get('accessToken')}`,
+   * })
+   * ```
+   */
+  requestInterceptor?: RequestInterceptor;
+
+  /** Send cookies with cross-origin requests (default: false) */
+  withCredentials?: boolean;
   
   /** Configure SSE streaming for real-time updates */
   streaming?: boolean | StreamingConfig;

@@ -52,6 +52,7 @@ export type {
 
   // Config
   FeatureFlagsConfig,
+  RequestInterceptor,
   RetryConfig,
   CircuitBreakerConfig,
   LogLevel,
