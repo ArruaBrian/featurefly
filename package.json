@@ -1,16 +1,16 @@
 {
   "name": "featurefly",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight, framework-agnostic Feature Flags SDK with built-in caching, retry, circuit breaker, targeting, A/B testing, and real-time streaming",
   "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc && tsc --project tsconfig.esm.json",
+    "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
@@ -76,7 +76,7 @@
   },
   "exports": {
     ".": {
-      "import": "./dist/index.esm.js",
+      "import": "./dist/index.js",
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
