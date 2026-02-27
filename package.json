@@ -37,13 +37,13 @@
   ],
   "author": "Arrua Platform Team",
   "license": "MIT",
-  "homepage": "https://github.com/arrua/featurefly#readme",
+  "homepage": "https://github.com/ArruaBrian/featurefly#readme",
   "bugs": {
-    "url": "https://github.com/arrua/featurefly/issues"
+    "url": "https://github.com/ArruaBrian/featurefly/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/arrua/featurefly.git"
+    "url": "https://github.com/ArruaBrian/featurefly.git"
   },
   "dependencies": {
     "axios": "^1.6.0"
