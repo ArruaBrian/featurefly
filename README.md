@@ -684,7 +684,7 @@ Built-in, zero-config resilience. No plugins needed.
 | TypeScript first                         |     ✅     |      ✅       |      ⚠️       |     ✅     |    ⚠️     |
 | Open source                              |   ✅ MIT   | ✅ Apache 2.0 | ✅ Apache 2.0 |   ✅ MIT   | ✅ BSD-3  |
 |                                          |            |               |               |            |           |
-| **Bundle size (gzipped)**                | **~21 KB** |   ~100 KB+    |    ~336 KB    |   ~9 KB    |  ~50 KB+  |
+| **Bundle size (gzipped)**                | **~11 KB** |   ~100 KB+    |    ~336 KB    |   ~9 KB    |  ~50 KB+  |
 | **Runtime dependencies**                 |   **0**    |      3+       |      5+       |   **0**    |    2+     |
 | **Pricing**                              |  **Free**  |     Paid      |   Free/Paid   |  **Free**  | Free/Paid |
 
