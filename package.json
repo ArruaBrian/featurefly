@@ -1,6 +1,6 @@
 {
   "name": "featurefly",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Lightweight, framework-agnostic Feature Flags SDK with built-in caching, retry, circuit breaker, targeting, A/B testing, and real-time streaming",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
