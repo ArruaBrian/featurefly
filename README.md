@@ -34,6 +34,7 @@ One package. Backend and frontend. Zero config to start.
 - [Evaluation Flow](#-evaluation-flow)
 - [Resilience](#-resilience)
 - [Feature Comparison](#-feature-comparison)
+- [Changelog](#-changelog)
 - [Roadmap](#-roadmap)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -179,6 +180,8 @@ client.on("flagsUpdated", async () => {
 ---
 
 ### ⚛️ React
+
+> **Note:** Requires React 16.8+ (hooks support).
 
 Import from `featurefly/react`. Hooks auto-re-evaluate when flags change via streaming.
 
@@ -692,7 +695,13 @@ Built-in, zero-config resilience. No plugins needed.
 
 ---
 
-## 🗺️ Roadmap
+## � Changelog
+
+All notable changes to this project are documented in [CHANGELOG.md](./CHANGELOG.md).
+
+---
+
+## �🗺️ Roadmap
 
 | Feature             | Status       | Description                                  |
 | ------------------- | ------------ | -------------------------------------------- |
@@ -723,3 +732,6 @@ npm run test:watch # Watch mode
 ## 📄 License
 
 MIT © Arrua Platform Team
+
+
+All notable changes to this project are documented in [CHANGELOG.md](./CHANGELOG.md).
