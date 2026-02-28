@@ -233,6 +233,8 @@ function MyComponent() {
 
 ### 💚 Vue 3
 
+> **Note:** Requires Vue 3.0+ (Composition API support).
+
 Import from `featurefly/vue`. Composables return reactive `Ref` values that update automatically.
 
 ```typescript
@@ -701,7 +703,7 @@ All notable changes to this project are documented in [CHANGELOG.md](./CHANGELOG
 
 ---
 
-## �🗺️ Roadmap
+## ��️ Roadmap
 
 | Feature             | Status       | Description                                  |
 | ------------------- | ------------ | -------------------------------------------- |
