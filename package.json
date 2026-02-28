@@ -2,21 +2,21 @@
   "name": "featurefly",
   "version": "0.2.0",
   "description": "Lightweight, framework-agnostic Feature Flags SDK with built-in caching, retry, circuit breaker, targeting, A/B testing, and real-time streaming",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
   "files": [
     "dist"
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc",
+    "build": "npm run clean && tsc -p tsconfig.json && tsc -p tsconfig.esm.json",
     "dev": "tsc --watch",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "feature-flags",
@@ -76,19 +76,34 @@
   },
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./react": {
-      "import": "./dist/react/index.js",
-      "require": "./dist/react/index.js",
-      "types": "./dist/react/index.d.ts"
+      "import": {
+        "types": "./dist/esm/react/index.d.ts",
+        "default": "./dist/esm/react/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/react/index.d.ts",
+        "default": "./dist/cjs/react/index.js"
+      }
     },
     "./vue": {
-      "import": "./dist/vue/index.js",
-      "require": "./dist/vue/index.js",
-      "types": "./dist/vue/index.d.ts"
+      "import": {
+        "types": "./dist/esm/vue/index.d.ts",
+        "default": "./dist/esm/vue/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/vue/index.d.ts",
+        "default": "./dist/cjs/vue/index.js"
+      }
     }
   },
   "engines": {

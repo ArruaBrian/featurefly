@@ -58,7 +58,7 @@ describe('FeatureFlagsClient', () => {
       const http = getMockHttp();
       http.get.mockResolvedValue({ data: { value: true } });
 
-      const result = await client.evaluateFlag('my-flag');
+      const result = await client.evaluateFlag('my-flag', false);
       expect(result).toBe(true);
       expect(http.get).toHaveBeenCalledWith('/feature-flags/my-flag/evaluate', { params: {} });
 
@@ -70,7 +70,7 @@ describe('FeatureFlagsClient', () => {
       const http = getMockHttp();
       http.get.mockResolvedValue({ data: { value: true } });
 
-      await client.evaluateFlag('my-flag', { workspaceId: 'ws-123' });
+      await client.evaluateFlag('my-flag', false, { workspaceId: 'ws-123' });
       expect(http.get).toHaveBeenCalledWith('/feature-flags/my-flag/evaluate', {
         params: { workspaceId: 'ws-123' },
       });
@@ -83,8 +83,8 @@ describe('FeatureFlagsClient', () => {
       const http = getMockHttp();
       http.get.mockResolvedValue({ data: { value: true } });
 
-      await client.evaluateFlag('my-flag');
-      const cached = await client.evaluateFlag('my-flag');
+      await client.evaluateFlag('my-flag', false);
+      const cached = await client.evaluateFlag('my-flag', false);
 
       expect(cached).toBe(true);
       expect(http.get).toHaveBeenCalledTimes(1); // only 1 HTTP call
@@ -97,7 +97,7 @@ describe('FeatureFlagsClient', () => {
       });
       const http = getMockHttp();
 
-      const result = await client.evaluateFlag('override-flag');
+      const result = await client.evaluateFlag('override-flag', false);
       expect(result).toBe(true);
       expect(http.get).not.toHaveBeenCalled();
       client.dispose();
@@ -110,7 +110,7 @@ describe('FeatureFlagsClient', () => {
       const http = getMockHttp();
       http.get.mockRejectedValue(new Error('network error'));
 
-      const result = await client.evaluateFlag('fallback-flag');
+      const result = await client.evaluateFlag('fallback-flag', false);
       expect(result).toBe(false);
       client.dispose();
     });
@@ -120,7 +120,7 @@ describe('FeatureFlagsClient', () => {
       const http = getMockHttp();
       http.get.mockRejectedValue(new Error('network error'));
 
-      const result = await client.evaluateFlag('no-fallback');
+      const result = await client.evaluateFlag('no-fallback', false);
       expect(result).toBe(false);
       client.dispose();
     });
@@ -130,7 +130,7 @@ describe('FeatureFlagsClient', () => {
       const http = getMockHttp();
       http.get.mockResolvedValue({ data: { value: 'variant-B' } });
 
-      const result = await client.evaluateFlag<string>('ab-test');
+      const result = await client.evaluateFlag<string>('ab-test', 'default');
       expect(result).toBe('variant-B');
       client.dispose();
     });
@@ -312,7 +312,7 @@ describe('FeatureFlagsClient', () => {
       const handler = jest.fn();
       client.on('flagEvaluated', handler);
 
-      await client.evaluateFlag('flag');
+      await client.evaluateFlag('flag', false);
       expect(handler).toHaveBeenCalledWith(
         expect.objectContaining({
           slug: 'flag',
@@ -331,8 +331,8 @@ describe('FeatureFlagsClient', () => {
       const handler = jest.fn();
       client.on('cacheHit', handler);
 
-      await client.evaluateFlag('flag');
-      await client.evaluateFlag('flag'); // second call should be cached
+      await client.evaluateFlag('flag', false);
+      await client.evaluateFlag('flag', false); // second call should be cached
 
       expect(handler).toHaveBeenCalledTimes(1);
       client.dispose();
@@ -346,7 +346,7 @@ describe('FeatureFlagsClient', () => {
       const handler = jest.fn();
       client.on('cacheMiss', handler);
 
-      await client.evaluateFlag('flag');
+      await client.evaluateFlag('flag', false);
       expect(handler).toHaveBeenCalledTimes(1);
       client.dispose();
     });
@@ -357,7 +357,7 @@ describe('FeatureFlagsClient', () => {
       const client = createClient();
       client.dispose();
 
-      await expect(client.evaluateFlag('flag')).rejects.toThrow('disposed');
+      await expect(client.evaluateFlag('flag', false)).rejects.toThrow('disposed');
       expect(client.isDisposed()).toBe(true);
     });
   });

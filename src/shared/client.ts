@@ -273,8 +273,9 @@ export class FeatureFlagsClient {
    * 3. Remote API call
    * 4. Fallback defaults
    */
-  async evaluateFlag<T extends FlagValue = boolean>(
+  async evaluateFlag<T extends FlagValue>(
     slug: string,
+    defaultValue: T,
     context?: EvaluationContext,
   ): Promise<T> {
     this.assertNotDisposed();
@@ -322,7 +323,7 @@ export class FeatureFlagsClient {
       this.cache.set(cacheKey, value);
       this.detectChange(slug, value);
       this.emitEvaluated(slug, value, 'DEFAULT', start);
-      return value as unknown as T;
+      return value;
     } catch (error) {
       // 5. Fallback
       if (slug in this.fallbackDefaults) {
@@ -332,9 +333,9 @@ export class FeatureFlagsClient {
         return value;
       }
 
-      this.logger.error(`Flag "${slug}" evaluation failed with no fallback`, error);
-      this.emitEvaluated(slug, false as FlagValue, 'ERROR', start);
-      return false as unknown as T;
+      this.logger.error(`Flag "${slug}" evaluation failed, using provided default`, error);
+      this.emitEvaluated(slug, defaultValue, 'ERROR', start);
+      return defaultValue;
     }
   }
 

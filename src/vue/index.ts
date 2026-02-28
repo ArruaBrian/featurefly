@@ -91,7 +91,7 @@ export function useFeatureFlag<T extends FlagValue = boolean>(
   const evaluate = async () => {
     try {
       const ctx = context && 'value' in context ? context.value : context;
-      const result = await client.evaluateFlag<T>(slug, ctx);
+      const result = await client.evaluateFlag<T>(slug, defaultValue, ctx);
       value.value = result;
     } catch {
       // Keep current value on error

@@ -19,6 +19,10 @@ export class InMemoryCache {
 
     if (ttlMs > 0) {
       this.cleanupTimer = setInterval(() => this.cleanup(), Math.max(ttlMs, 30_000));
+      // In Node.js, we don't want this timer to keep the process alive
+      if (typeof this.cleanupTimer === 'object' && typeof this.cleanupTimer.unref === 'function') {
+        this.cleanupTimer.unref();
+      }
     }
   }
 

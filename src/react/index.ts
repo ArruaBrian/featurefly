@@ -101,7 +101,7 @@ export function useFeatureFlag<T extends FlagValue = boolean>(
   const evaluate = useCallback(async () => {
     try {
       setLoading(true);
-      const result = await client.evaluateFlag<T>(slug, context);
+      const result = await client.evaluateFlag<T>(slug, defaultValue, context);
       setValue(result);
       setError(null);
     } catch (e) {
@@ -109,7 +109,7 @@ export function useFeatureFlag<T extends FlagValue = boolean>(
     } finally {
       setLoading(false);
     }
-  }, [client, slug, contextKey]);
+  }, [client, slug, defaultValue, contextKey]);
 
   // Initial evaluation
   useEffect(() => {
