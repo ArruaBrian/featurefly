@@ -309,6 +309,8 @@ export interface FeatureFlagsConfig {
   streaming?: boolean | StreamingConfig;
   /** Pass a flag document to enable Edge mode (offline local evaluation) */
   edgeDocument?: FlagDocument;
+  /** Pre-evaluated flags to instantly hydrate the client cache (useful for SSR to avoid initial loading states) */
+  bootstrapFlags?: Record<string, FlagValue>;
   /** Hook for A/B testing variable assignments */
   trackingCallback?: TrackingCallback;
 }

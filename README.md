@@ -316,6 +316,11 @@ const client = new FeatureFlagsClient({
     "variant-test": "blue",
   },
 
+  // Pre-evaluated flags to hydrate the client instantly (e.g. injected by Next.js/SSR)
+  bootstrapFlags: {
+    "new-checkout": true
+  },
+
   // Fallback defaults when the API is unreachable
   fallbackDefaults: {
     "critical-feature": false,
@@ -452,6 +457,23 @@ const edgeClient = new FeatureFlagsClient({
 // 3. Evaluate — zero network calls, zero latency
 const value = await edgeClient.evaluateFlag("my-flag", {
   userId: "user-123",
+});
+```
+
+### SSR & Bootstrapping (Zero-Flicker)
+
+For Server-Side Rendering (Next.js, Nuxt, Remix), you can inject pre-evaluated flags from the server to the client. This hydrates the client cache instantly, ensuring `loading` is `false` on the first render and avoiding any UI flickering.
+
+```tsx
+// 1. Server evaluates flags and injects them into the HTML
+const serverFlags = await serverClient.evaluateAllFlags({ userId });
+window.__FEATURE_FLAGS__ = serverFlags;
+
+// 2. Client initializes with bootstrap flags (no initial HTTP request made)
+const client = new FeatureFlagsClient({
+  baseUrl: "https://your-api.com",
+  apiKey: "pk_live_xxx",
+  bootstrapFlags: window.__FEATURE_FLAGS__,
 });
 ```
 

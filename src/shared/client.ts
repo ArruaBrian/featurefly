@@ -93,6 +93,16 @@ export class FeatureFlagsClient {
     const cacheTtl = config.cacheEnabled === false ? 0 : (config.cacheTtlMs ?? DEFAULT_CACHE_TTL);
     this.cache = new InMemoryCache(cacheTtl);
 
+    // Bootstrap Flags (SSR Hydration)
+    if (config.bootstrapFlags) {
+      // Seed individual flags
+      for (const [slug, value] of Object.entries(config.bootstrapFlags)) {
+        this.cache.set(this.buildCacheKey('evaluate', slug), value);
+      }
+      // Seed batch evaluation result
+      this.cache.set(this.buildCacheKey('batch-evaluate'), config.bootstrapFlags);
+    }
+
     // Retry
     this.retryConfig = { ...DEFAULT_RETRY, ...config.retry };
 
