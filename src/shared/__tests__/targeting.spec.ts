@@ -113,7 +113,8 @@ describe('Targeting Engine', () => {
           conditions: [{ attribute: 'version', operator: 'semver_eq', value: '2.0.0' }]
         };
         expect(evaluateRule(eqSemverRule, { attributes: { version: '2.0.0' } })).toBe(true);
-        expect(evaluateRule(eqSemverRule, { attributes: { version: '2.0' } })).toBe(false); // Basic implementation expects padding
+        expect(evaluateRule(eqSemverRule, { attributes: { version: '2.0' } })).toBe(true); // Now supports padding correctly
+        expect(evaluateRule(eqSemverRule, { attributes: { version: '2.0.1' } })).toBe(false);
       });
     });
   });

@@ -6,7 +6,7 @@ One package. Backend and frontend. Zero config to start.
 [![npm version](https://img.shields.io/npm/v/featurefly.svg)](https://www.npmjs.com/package/featurefly)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-first-blue.svg)](https://www.typescriptlang.org/)
-[![Bundle Size](https://img.shields.io/badge/gzipped-~21KB-green.svg)](#-feature-comparison)
+[![Bundle Size](https://img.shields.io/badge/gzipped-~11KB-green.svg)](#-feature-comparison)
 
 ---
 
@@ -571,7 +571,7 @@ FeatureFly ships as a **single universal package** that works on both the server
 
 | Concern                   | How it's handled                                                                                                                                            |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **HTTP client**           | Uses `axios`, which auto-detects the environment (Node.js `http` module vs browser `XMLHttpRequest`).                                                       |
+| **HTTP client**           | Uses native `fetch`, which auto-detects the environment (Node.js `http` module vs browser `XMLHttpRequest`).                                                       |
 | **Hashing (MurmurHash3)** | Implemented in pure TypeScript — no dependency on Node.js `crypto`.                                                                                         |
 | **SSE Streaming**         | Uses the native browser `EventSource` API. On Node.js < 22, streaming is disabled unless you provide a polyfill. Node.js 22+ includes native `EventSource`. |
 | **Build format**          | Ships both CJS (`require()`) and ESM (`import`). Your bundler picks the right one.                                                                          |
@@ -685,7 +685,7 @@ Built-in, zero-config resilience. No plugins needed.
 | Open source                              |   ✅ MIT   | ✅ Apache 2.0 | ✅ Apache 2.0 |   ✅ MIT   | ✅ BSD-3  |
 |                                          |            |               |               |            |           |
 | **Bundle size (gzipped)**                | **~21 KB** |   ~100 KB+    |    ~336 KB    |   ~9 KB    |  ~50 KB+  |
-| **Runtime dependencies**                 |   **1**    |      3+       |      5+       |   **0**    |    2+     |
+| **Runtime dependencies**                 |   **0**    |      3+       |      5+       |   **0**    |    2+     |
 | **Pricing**                              |  **Free**  |     Paid      |   Free/Paid   |  **Free**  | Free/Paid |
 
 > ✅ Supported · ⚠️ Partial · ❌ Not available

@@ -1,4 +1,3 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import {
   FeatureFlag,
   WorkspaceFeatureFlag,
@@ -44,6 +43,18 @@ const DEFAULT_CIRCUIT_BREAKER: CircuitBreakerConfig = {
   resetTimeoutMs: 30_000,
 };
 
+// Custom Fetch Error class to mirror Axios minimal behavior
+export class FetchError extends Error {
+  response?: { status: number; data?: any };
+  constructor(message: string, status?: number, data?: any) {
+    super(message);
+    this.name = 'FetchError';
+    if (status) {
+      this.response = { status, data };
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLIENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -67,11 +78,16 @@ const DEFAULT_CIRCUIT_BREAKER: CircuitBreakerConfig = {
  *   apiKey: 'your-key',
  * });
  *
- * const isEnabled = await client.evaluateFlag('new-feature', { workspaceId: '123' });
+ * const isEnabled = await client.evaluateFlag('new-feature', false, { workspaceId: '123' });
  * ```
  */
 export class FeatureFlagsClient {
-  private readonly http: AxiosInstance;
+  private readonly baseUrl: string;
+  private readonly timeout: number;
+  private readonly headers: Record<string, string>;
+  private readonly requestInterceptor?: () => Record<string, string> | Promise<Record<string, string>>;
+  private readonly withCredentials: boolean;
+
   private readonly cache: InMemoryCache;
   private readonly circuitBreaker: CircuitBreaker;
   private readonly events: EventEmitter;
@@ -131,31 +147,16 @@ export class FeatureFlagsClient {
     this.localOverrides = { ...config.localOverrides };
     this.fallbackDefaults = { ...config.fallbackDefaults };
 
-    // HTTP client
-    this.http = axios.create({
-      baseURL: config.baseUrl,
-      timeout: config.timeout ?? DEFAULT_TIMEOUT,
-      withCredentials: config.withCredentials ?? false,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(config.apiKey && { Authorization: `Bearer ${config.apiKey}` }),
-        ...config.headers,
-      },
-    });
-
-    // Request interceptor for dynamic headers (e.g. JWT tokens that rotate)
-    if (config.requestInterceptor) {
-      const interceptor = config.requestInterceptor;
-      this.http.interceptors.request.use(async (reqConfig) => {
-        try {
-          const dynamicHeaders = await interceptor();
-          Object.assign(reqConfig.headers, dynamicHeaders);
-        } catch (e) {
-          this.logger.warn('requestInterceptor threw — request proceeds without dynamic headers', e);
-        }
-        return reqConfig;
-      });
-    }
+    // HTTP client config
+    this.baseUrl = config.baseUrl;
+    this.timeout = config.timeout ?? DEFAULT_TIMEOUT;
+    this.withCredentials = config.withCredentials ?? false;
+    this.headers = {
+      'Content-Type': 'application/json',
+      ...(config.apiKey && { Authorization: `Bearer ${config.apiKey}` }),
+      ...config.headers,
+    };
+    this.requestInterceptor = config.requestInterceptor;
 
     // Edge Evaluator Initialization
     if (config.edgeDocument) {
@@ -199,6 +200,64 @@ export class FeatureFlagsClient {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // HTTP FETCH ABSTRACTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    let dynamicHeaders: Record<string, string> = {};
+    if (this.requestInterceptor) {
+      try {
+        dynamicHeaders = await this.requestInterceptor();
+      } catch (e) {
+        this.logger.warn('requestInterceptor threw — request proceeds without dynamic headers', e);
+      }
+    }
+
+    const url = new URL(path, this.baseUrl);
+    const fetchOptions: RequestInit = {
+      ...options,
+      headers: {
+        ...this.headers,
+        ...options.headers,
+        ...dynamicHeaders,
+      },
+    };
+
+    if (this.withCredentials) {
+      fetchOptions.credentials = 'include';
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    fetchOptions.signal = controller.signal as AbortSignal;
+
+    try {
+      const res = await fetch(url.toString(), fetchOptions);
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        let errorData;
+        try {
+          errorData = await res.json();
+        } catch {
+          // ignore
+        }
+        throw new FetchError(`HTTP Error: ${res.status} ${res.statusText}`, res.status, errorData);
+      }
+
+      if (res.status === 204) {
+        return null as unknown as T;
+      }
+      return await res.json() as T;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new FetchError(`Request timeout after ${this.timeout}ms`);
+      }
+      throw error;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // STREAMING & EDGE MANAGERS
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -228,8 +287,7 @@ export class FeatureFlagsClient {
   async loadEdgeDocument(): Promise<void> {
     this.assertNotDisposed();
     const doc = await this.fetchWithResiliency(async () => {
-      const response = await this.http.get<FlagDocument>('/feature-flags/document');
-      return response.data;
+      return await this.request<FlagDocument>('/feature-flags/document');
     });
     
     if (this.edgeEvaluator) {
@@ -243,8 +301,8 @@ export class FeatureFlagsClient {
   private async refreshEdgeDocument(): Promise<void> {
     if (!this.edgeEvaluator) return;
     try {
-      const response = await this.http.get<FlagDocument>('/feature-flags/document');
-      this.edgeEvaluator.updateDocument(response.data);
+      const doc = await this.request<FlagDocument>('/feature-flags/document');
+      this.edgeEvaluator.updateDocument(doc);
       this.logger.debug('Edge document refreshed from stream trigger');
     } catch (e) {
       this.logger.error('Failed to refresh edge document', e);
@@ -322,12 +380,22 @@ export class FeatureFlagsClient {
     // 4. Remote call
     try {
       const value = await this.fetchWithResiliency<T>(async () => {
-        const params = context ?? {};
-        const response: AxiosResponse<{ value: T }> = await this.http.get(
-          `/feature-flags/${slug}/evaluate`,
-          { params },
-        );
-        return response.data.value;
+        let path = `/feature-flags/${slug}/evaluate`;
+        if (context) {
+          const searchParams = new URLSearchParams();
+          if (context.workspaceId) searchParams.append('workspaceId', context.workspaceId);
+          if (context.userId) searchParams.append('userId', context.userId);
+          if (context.attributes) {
+            for (const [k, v] of Object.entries(context.attributes)) {
+              searchParams.append(`attributes[${k}]`, String(v));
+            }
+          }
+          const qs = searchParams.toString();
+          if (qs) path += `?${qs}`;
+        }
+        
+        const response = await this.request<{ value: T }>(path);
+        return response.value;
       });
 
       this.cache.set(cacheKey, value);
@@ -373,12 +441,21 @@ export class FeatureFlagsClient {
 
     try {
       const result = await this.fetchWithResiliency(async () => {
-        const params = context ?? {};
-        const response: AxiosResponse<Record<string, FlagValue>> = await this.http.get(
-          '/feature-flags/batch/evaluate',
-          { params },
-        );
-        return response.data;
+        let path = '/feature-flags/batch/evaluate';
+        if (context) {
+          const searchParams = new URLSearchParams();
+          if (context.workspaceId) searchParams.append('workspaceId', context.workspaceId);
+          if (context.userId) searchParams.append('userId', context.userId);
+          if (context.attributes) {
+            for (const [k, v] of Object.entries(context.attributes)) {
+              searchParams.append(`attributes[${k}]`, String(v));
+            }
+          }
+          const qs = searchParams.toString();
+          if (qs) path += `?${qs}`;
+        }
+        
+        return await this.request<Record<string, FlagValue>>(path);
       });
 
       // Merge local overrides on top
@@ -397,12 +474,15 @@ export class FeatureFlagsClient {
 
   async createFlag(data: CreateFlagData): Promise<FeatureFlag> {
     this.assertNotDisposed();
-    const response: AxiosResponse<FeatureFlag> = await this.fetchWithResiliency(
-      () => this.http.post('/feature-flags', data),
+    const result = await this.fetchWithResiliency(
+      () => this.request<FeatureFlag>('/feature-flags', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
     );
     this.cache.clear();
     this.events.emit('cacheCleared', undefined as never);
-    return response.data;
+    return result;
   }
 
   async getAllFlags(): Promise<FeatureFlag[]> {
@@ -411,11 +491,11 @@ export class FeatureFlagsClient {
     const cached = this.cache.get<FeatureFlag[]>(cacheKey);
     if (cached.hit) return cached.value;
 
-    const response: AxiosResponse<FeatureFlag[]> = await this.fetchWithResiliency(
-      () => this.http.get('/feature-flags'),
+    const result = await this.fetchWithResiliency(
+      () => this.request<FeatureFlag[]>('/feature-flags'),
     );
-    this.cache.set(cacheKey, response.data);
-    return response.data;
+    this.cache.set(cacheKey, result);
+    return result;
   }
 
   async getFlagById(id: string): Promise<FeatureFlag | null> {
@@ -425,13 +505,13 @@ export class FeatureFlagsClient {
     if (cached.hit) return cached.value;
 
     try {
-      const response: AxiosResponse<FeatureFlag> = await this.fetchWithResiliency(
-        () => this.http.get(`/feature-flags/${id}`),
+      const result = await this.fetchWithResiliency(
+        () => this.request<FeatureFlag>(`/feature-flags/${id}`),
       );
-      this.cache.set(cacheKey, response.data);
-      return response.data;
+      this.cache.set(cacheKey, result);
+      return result;
     } catch (error: unknown) {
-      if (axios.isAxiosError(error) && error.response?.status === 404) return null;
+      if (error instanceof FetchError && error.response?.status === 404) return null;
       throw error;
     }
   }
@@ -443,30 +523,33 @@ export class FeatureFlagsClient {
     if (cached.hit) return cached.value;
 
     try {
-      const response: AxiosResponse<FeatureFlag> = await this.fetchWithResiliency(
-        () => this.http.get(`/feature-flags/slug/${slug}`),
+      const result = await this.fetchWithResiliency(
+        () => this.request<FeatureFlag>(`/feature-flags/slug/${slug}`),
       );
-      this.cache.set(cacheKey, response.data);
-      return response.data;
+      this.cache.set(cacheKey, result);
+      return result;
     } catch (error: unknown) {
-      if (axios.isAxiosError(error) && error.response?.status === 404) return null;
+      if (error instanceof FetchError && error.response?.status === 404) return null;
       throw error;
     }
   }
 
   async updateFlag(id: string, data: UpdateFlagData): Promise<FeatureFlag> {
     this.assertNotDisposed();
-    const response: AxiosResponse<FeatureFlag> = await this.fetchWithResiliency(
-      () => this.http.patch(`/feature-flags/${id}`, data),
+    const result = await this.fetchWithResiliency(
+      () => this.request<FeatureFlag>(`/feature-flags/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      }),
     );
     this.cache.clear();
     this.events.emit('cacheCleared', undefined as never);
-    return response.data;
+    return result;
   }
 
   async deleteFlag(id: string): Promise<void> {
     this.assertNotDisposed();
-    await this.fetchWithResiliency(() => this.http.delete(`/feature-flags/${id}`));
+    await this.fetchWithResiliency(() => this.request(`/feature-flags/${id}`, { method: 'DELETE' }));
     this.cache.clear();
     this.events.emit('cacheCleared', undefined as never);
   }
@@ -478,8 +561,11 @@ export class FeatureFlagsClient {
   async setWorkspaceFlag(slug: string, workspaceId: string, value: FlagValue): Promise<WorkspaceFeatureFlag> {
     this.assertNotDisposed();
     const data: SetWorkspaceFlagData = { value };
-    const response: AxiosResponse<WorkspaceFeatureFlag> = await this.fetchWithResiliency(
-      () => this.http.post(`/feature-flags/${slug}/workspaces/${workspaceId}`, data),
+    const result = await this.fetchWithResiliency(
+      () => this.request<WorkspaceFeatureFlag>(`/feature-flags/${slug}/workspaces/${workspaceId}`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
     );
 
     // Invalidate relevant cache entries
@@ -487,13 +573,13 @@ export class FeatureFlagsClient {
     this.cache.delete(this.buildCacheKey('batch-evaluate', undefined, { workspaceId }));
     this.cache.delete(`workspace-flags-${workspaceId}`);
 
-    return response.data;
+    return result;
   }
 
   async removeWorkspaceFlag(slug: string, workspaceId: string): Promise<void> {
     this.assertNotDisposed();
     await this.fetchWithResiliency(
-      () => this.http.delete(`/feature-flags/${slug}/workspaces/${workspaceId}`),
+      () => this.request(`/feature-flags/${slug}/workspaces/${workspaceId}`, { method: 'DELETE' }),
     );
 
     this.cache.delete(this.buildCacheKey('evaluate', slug, { workspaceId }));
@@ -507,11 +593,11 @@ export class FeatureFlagsClient {
     const cached = this.cache.get<WorkspaceFeatureFlag[]>(cacheKey);
     if (cached.hit) return cached.value;
 
-    const response: AxiosResponse<WorkspaceFeatureFlag[]> = await this.fetchWithResiliency(
-      () => this.http.get(`/feature-flags/workspaces/${workspaceId}/flags`),
+    const result = await this.fetchWithResiliency(
+      () => this.request<WorkspaceFeatureFlag[]>(`/feature-flags/workspaces/${workspaceId}/flags`),
     );
-    this.cache.set(cacheKey, response.data);
-    return response.data;
+    this.cache.set(cacheKey, result);
+    return result;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -524,11 +610,11 @@ export class FeatureFlagsClient {
     const cached = this.cache.get<FeatureFlagStats>(cacheKey);
     if (cached.hit) return cached.value;
 
-    const response: AxiosResponse<FeatureFlagStats> = await this.fetchWithResiliency(
-      () => this.http.get('/feature-flags/stats/overview'),
+    const result = await this.fetchWithResiliency(
+      () => this.request<FeatureFlagStats>('/feature-flags/stats/overview'),
     );
-    this.cache.set(cacheKey, response.data);
-    return response.data;
+    this.cache.set(cacheKey, result);
+    return result;
   }
 
   async getFlagsByCategory(category: 'frontend' | 'backend' | 'both'): Promise<FeatureFlag[]> {
@@ -537,11 +623,11 @@ export class FeatureFlagsClient {
     const cached = this.cache.get<FeatureFlag[]>(cacheKey);
     if (cached.hit) return cached.value;
 
-    const response: AxiosResponse<FeatureFlag[]> = await this.fetchWithResiliency(
-      () => this.http.get(`/feature-flags/category/${category}`),
+    const result = await this.fetchWithResiliency(
+      () => this.request<FeatureFlag[]>(`/feature-flags/category/${category}`),
     );
-    this.cache.set(cacheKey, response.data);
-    return response.data;
+    this.cache.set(cacheKey, result);
+    return result;
   }
 
   async getFlagsByTargetService(serviceName: string): Promise<FeatureFlag[]> {
@@ -550,11 +636,11 @@ export class FeatureFlagsClient {
     const cached = this.cache.get<FeatureFlag[]>(cacheKey);
     if (cached.hit) return cached.value;
 
-    const response: AxiosResponse<FeatureFlag[]> = await this.fetchWithResiliency(
-      () => this.http.get(`/feature-flags/service/${serviceName}`),
+    const result = await this.fetchWithResiliency(
+      () => this.request<FeatureFlag[]>(`/feature-flags/service/${serviceName}`),
     );
-    this.cache.set(cacheKey, response.data);
-    return response.data;
+    this.cache.set(cacheKey, result);
+    return result;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

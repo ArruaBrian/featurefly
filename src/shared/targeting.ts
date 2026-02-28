@@ -1,4 +1,5 @@
 import { EvaluationContext, FlagValue, TargetingRule, TargetingCondition } from './types';
+import { compareSemverStrict } from './semver';
 
 /**
  * Evaluates a set of targeting rules against an evaluation context.
@@ -84,7 +85,7 @@ function evaluateCondition(condition: TargetingCondition, context: EvaluationCon
     case 'semver_eq':
     case 'semver_gt':
     case 'semver_lt':
-      return compareSemver(String(contextValue), String(targetValue), operator);
+      return compareSemverStrict(String(contextValue), String(targetValue), operator);
     default:
       return false; // Unknown operator fails
   }
@@ -109,36 +110,5 @@ function getContextAttribute(attribute: string, context: EvaluationContext | und
 function isNumeric(value: unknown): boolean {
   if (typeof value === 'number') return true;
   if (typeof value === 'string') return value.trim() !== '' && !Number.isNaN(Number(value));
-  return false;
-}
-
-/**
- * Basic semantic version comparison.
- * Note: Assumes standard x.y.z format without prerelease tags for simplicity in this lightweight implementation.
- */
-function compareSemver(v1: string, v2: string, operator: 'semver_eq' | 'semver_gt' | 'semver_lt'): boolean {
-  if (typeof v1 !== 'string' || typeof v2 !== 'string') return false;
-
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
-
-  // Pad arrays to same length
-  const maxLength = Math.max(parts1.length, parts2.length);
-  for (let i = 0; i < maxLength; i++) {
-    const p1 = parts1[i] || 0;
-    const p2 = parts2[i] || 0;
-
-    if (p1 > p2) return operator === 'semver_gt';
-    if (p1 < p2) return operator === 'semver_lt';
-  }
-
-  // All parts equal numerically up to maxLength
-  // For exact match, strictly require identical structures or 0-padding equivalence
-  // We'll consider 2.0.0 and 2.0 NOT equal for strictness in rule targeting, 
-  // users should specify full versions.
-  if (operator === 'semver_eq') {
-    return parts1.length === parts2.length;
-  }
-
   return false;
 }
