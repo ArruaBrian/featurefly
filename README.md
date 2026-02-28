@@ -46,10 +46,10 @@ One package. Backend and frontend. Zero config to start.
 npm install featurefly
 ```
 
-> **Peer dependencies (optional):** If you plan to use the React hooks or Vue composables, install the corresponding framework alongside:
+> **Zero runtime dependencies!** FeatureFly has no runtime dependencies. Only install your framework if you want to use the framework-specific hooks:
 >
 > ```bash
-> # React projects
+> # React projects (optional - only if you want hooks)
 > npm install featurefly react
 >
 > # Vue 3 projects
