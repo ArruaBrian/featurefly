@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-03-01
+
+### Fixed
+- **CJS Build**: Fixed critical bug where CommonJS output files were emitted with ESM `import/export` syntax instead of `require/module.exports`, causing `ERR_MODULE_NOT_FOUND` errors in Node.js CJS environments (NestJS, Express, etc.).
+- **tsconfig.json**: Set `"module": "CommonJS"` for the CJS build target. The ESM build continues to use `"module": "ESNext"` via `tsconfig.esm.json`.
+
+## [0.2.3] - 2026-02-28
+
+### Added
+- **Dual Build announcement**: Published with intended dual CJS/ESM support via `exports` in `package.json`. (Note: CJS output had a build bug fixed in 0.2.4.)
+
 ## [0.2.2] - 2026-02-28
 
 ### Changed
