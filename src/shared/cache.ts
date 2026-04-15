@@ -1,6 +1,20 @@
+import { ILogger } from './types';
+
+const DEFAULT_CACHE_TTL = 60_000;
+
 interface CacheEntry<T> {
   value: T;
   expiresAt: number;
+}
+
+/**
+ * Options for configuring the InMemoryCache instance.
+ */
+export interface CacheOptions {
+  /**
+   * Logger instance for warnings. If not provided, no warnings will be logged.
+   */
+  logger?: ILogger;
 }
 
 /**
@@ -12,13 +26,31 @@ interface CacheEntry<T> {
 export class InMemoryCache {
   private readonly store = new Map<string, CacheEntry<unknown>>();
   private readonly ttlMs: number;
+  private readonly logger?: ILogger;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(ttlMs: number = 60_000) {
-    this.ttlMs = ttlMs;
+  constructor(ttlMs: number = DEFAULT_CACHE_TTL, options?: CacheOptions) {
+    this.logger = options?.logger;
 
-    if (ttlMs > 0) {
-      this.cleanupTimer = setInterval(() => this.cleanup(), Math.max(ttlMs, 30_000));
+    // Validate TTL
+    if (isNaN(ttlMs) || ttlMs < 0) {
+      this.logger?.warn(
+        `Invalid cache TTL ${ttlMs}ms. Using default ${DEFAULT_CACHE_TTL}ms.`,
+      );
+      this.ttlMs = DEFAULT_CACHE_TTL;
+    } else {
+      this.ttlMs = ttlMs;
+    }
+
+    // Warn if TTL is too low (cleanup runs every max(ttlMs, 30000)ms)
+    if (this.ttlMs > 0 && this.ttlMs < 1000) {
+      this.logger?.warn(
+        `Cache TTL ${this.ttlMs}ms is below 1000ms. Cleanup runs every max(${this.ttlMs}, 30000)ms.`,
+      );
+    }
+
+    if (this.ttlMs > 0) {
+      this.cleanupTimer = setInterval(() => this.cleanup(), Math.max(this.ttlMs, 30_000));
       // In Node.js, we don't want this timer to keep the process alive
       if (typeof this.cleanupTimer === 'object' && typeof this.cleanupTimer.unref === 'function') {
         this.cleanupTimer.unref();
@@ -83,6 +115,7 @@ export class InMemoryCache {
   /**
    * Release the cleanup timer. Call this when the client is being disposed
    * to prevent memory leaks and dangling timers.
+   * Idempotent: safe to call multiple times.
    */
   destroy(): void {
     if (this.cleanupTimer) {

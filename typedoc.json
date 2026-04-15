@@ -1,0 +1,17 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts", "src/react/index.ts", "src/vue/index.ts"],
+  "out": "docs",
+  "name": "FeatureFly SDK",
+  "readme": "README.md",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "includeVersion": true,
+  "categorizeByGroup": true,
+  "navigationLinks": {
+    "GitHub": "https://github.com/ArruaBrian/featurefly",
+    "npm": "https://www.npmjs.com/package/featurefly"
+  },
+  "plugin": ["typedoc-plugin-markdown"]
+}

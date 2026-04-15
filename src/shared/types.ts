@@ -176,7 +176,8 @@ export type EvaluationReason =
   | 'FALLBACK'
   | 'ERROR'
   | 'LOCAL_OVERRIDE'
-  | 'CACHE_HIT';
+  | 'CACHE_HIT'
+  | 'NOT_FOUND';
 
 export interface BatchEvaluation {
   flags: Record<string, FlagValue>;
@@ -227,7 +228,13 @@ export interface CircuitBreakerConfig {
  * Retry configuration
  */
 export interface RetryConfig {
-  /** Max number of retry attempts (default: 3) */
+  /**
+   * Total number of execution attempts (initial + retries).
+   * - Values <= 0 are treated as 1 (with a warning logged)
+   * - NaN uses the default of 3
+   * - Example: maxAttempts=1 means run once, no retries; maxAttempts=2 means run once, retry once
+   * (default: 3)
+   */
   maxAttempts: number;
   /** Base delay in ms between retries, doubles each attempt (default: 1000) */
   baseDelayMs: number;
@@ -270,6 +277,8 @@ export interface FeatureFlagsConfig {
   circuitBreaker?: Partial<CircuitBreakerConfig>;
   /** Log level (default: 'warn') */
   logLevel?: LogLevel;
+  /** Prefix for the default ConsoleLogger messages (default: '[FeatureFly]'). Ignored when a custom `logger` is provided. */
+  logPrefix?: string;
   /** Custom logger implementation */
   logger?: ILogger;
   /** Local flag overrides — useful for development/testing. These skip HTTP entirely. */
@@ -332,7 +341,8 @@ export type FeatureFlyEvent =
   | 'flagsUpdated'
   | 'streamConnected'
   | 'streamDisconnected'
-  | 'experimentAssigned';
+  | 'experimentAssigned'
+  | 'listenerError';
 
 export interface FlagEvaluatedPayload {
   slug: string;
@@ -368,10 +378,11 @@ export type EventPayloadMap = {
   circuitOpen: CircuitStatePayload;
   circuitClosed: CircuitStatePayload;
   circuitHalfOpen: CircuitStatePayload;
-  flagsUpdated: { source: 'stream' | 'fetch'; count: number };
+  flagsUpdated: { source: 'stream' | 'fetch'; slugs?: string[]; count: number; hasVersionGap?: boolean };
   streamConnected: void;
   streamDisconnected: { error?: Error };
   experimentAssigned: ExperimentAssignment;
+  listenerError: { event: FeatureFlyEvent; error: Error; handler: symbol };
 };
 
 export type EventHandler<E extends FeatureFlyEvent> = (payload: EventPayloadMap[E]) => void;

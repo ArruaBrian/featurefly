@@ -17,11 +17,13 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   createElement,
   type ReactNode,
 } from 'react';
 import type { FeatureFlagsClient } from '../shared/client';
 import type { EvaluationContext, FlagValue, FlagChangedPayload } from '../shared/types';
+import { stableStringify } from '../shared/utils';
 
 // ─── Context ────────────────────────────────────────────────────────────────────
 
@@ -88,49 +90,88 @@ export function useFeatureFlag<T extends FlagValue = boolean>(
   context?: EvaluationContext,
 ): UseFeatureFlagResult<T> {
   const client = useClient();
+  
+  // Track mounted state to prevent setState after unmount
+  const mountedRef = useRef(true);
+  // Track current evaluation request to handle race conditions
+  const evaluationIdRef = useRef(0);
+  
   const [value, setValue] = useState<T>(defaultValue);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   // Memoize context to avoid infinite re-renders
   const contextKey = useMemo(
-    () => JSON.stringify(context ?? {}),
+    () => stableStringify(context ?? {}),
     [context?.userId, context?.workspaceId, context?.attributes],
   );
 
-  const evaluate = useCallback(async () => {
+  // Stable evaluate function that handles race conditions and unmount protection
+  const evaluate = useCallback(async (evaluationId: number): Promise<void> => {
+    // Skip if this evaluation is stale (another evaluation started)
+    if (evaluationId !== evaluationIdRef.current) return;
+    
     try {
       setLoading(true);
       const result = await client.evaluateFlag<T>(slug, defaultValue, context);
+      
+      // Double-check mounted state AND evaluationId after async op
+      if (!mountedRef.current || evaluationId !== evaluationIdRef.current) return;
+      
       setValue(result);
       setError(null);
     } catch (e) {
+      if (!mountedRef.current || evaluationId !== evaluationIdRef.current) return;
       setError(e instanceof Error ? e : new Error(String(e)));
     } finally {
-      setLoading(false);
+      // Only update loading if still mounted and this is still the current evaluation
+      if (mountedRef.current && evaluationId === evaluationIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [client, slug, defaultValue, contextKey]);
 
-  // Initial evaluation
   useEffect(() => {
-    evaluate();
-  }, [evaluate]);
+    mountedRef.current = true;
+    evaluationIdRef.current = 0;
+    
+    // Initial synchronous cache check
+    // If bootstrapFlags was provided, the cache already has the value
+    const cached = client.getCachedFlag<T>(slug, context);
+    if (cached !== undefined) {
+      setValue(cached);
+      setLoading(false);
+      // Still set up listeners for future updates
+    } else {
+      // Start async evaluation
+      evaluationIdRef.current = 1;
+      evaluate(1);
+    }
 
-  // Re-evaluate on stream updates or flag changes
-  useEffect(() => {
+    // Unified effect: event subscriptions + cleanup
     const unsubs: Array<() => void> = [];
 
     unsubs.push(
-      client.on('flagsUpdated', () => evaluate()),
+      client.on('flagsUpdated', () => {
+        evaluationIdRef.current++;
+        evaluate(evaluationIdRef.current);
+      }),
     );
+    
     unsubs.push(
       client.on('flagChanged', (payload: FlagChangedPayload) => {
-        if (payload.slug === slug) evaluate();
+        if (payload.slug === slug) {
+          evaluationIdRef.current++;
+          evaluate(evaluationIdRef.current);
+        }
       }),
     );
 
-    return () => unsubs.forEach((u) => u());
-  }, [client, slug, evaluate]);
+    return () => {
+      mountedRef.current = false;
+      unsubs.forEach((u) => u());
+    };
+  }, [client, slug, contextKey, evaluate]);
 
   return { value, loading, error };
 }
@@ -154,36 +195,72 @@ export interface UseAllFlagsResult {
  */
 export function useAllFlags(context?: EvaluationContext): UseAllFlagsResult {
   const client = useClient();
+  
+  // Track mounted state to prevent setState after unmount
+  const mountedRef = useRef(true);
+  // Track current evaluation request to handle race conditions
+  const evaluationIdRef = useRef(0);
+  
   const [flags, setFlags] = useState<Record<string, FlagValue>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const contextKey = useMemo(
-    () => JSON.stringify(context ?? {}),
+    () => stableStringify(context ?? {}),
     [context?.userId, context?.workspaceId, context?.attributes],
   );
 
-  const evaluate = useCallback(async () => {
+  // Stable evaluate function that handles race conditions and unmount protection
+  const evaluate = useCallback(async (evaluationId: number): Promise<void> => {
+    // Skip if this evaluation is stale (another evaluation started)
+    if (evaluationId !== evaluationIdRef.current) return;
+    
     try {
       setLoading(true);
       const result = await client.evaluateAllFlags(context);
+      
+      // Double-check mounted state AND evaluationId after async op
+      if (!mountedRef.current || evaluationId !== evaluationIdRef.current) return;
+      
       setFlags(result);
       setError(null);
     } catch (e) {
+      if (!mountedRef.current || evaluationId !== evaluationIdRef.current) return;
       setError(e instanceof Error ? e : new Error(String(e)));
     } finally {
-      setLoading(false);
+      // Only update loading if still mounted and this is still the current evaluation
+      if (mountedRef.current && evaluationId === evaluationIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [client, contextKey]);
 
   useEffect(() => {
-    evaluate();
-  }, [evaluate]);
+    mountedRef.current = true;
+    evaluationIdRef.current = 0;
+    
+    // Initial synchronous cache check
+    const cached = client.getCachedFlags(context);
+    if (cached !== undefined) {
+      setFlags(cached);
+      setLoading(false);
+    } else {
+      // Start async evaluation
+      evaluationIdRef.current = 1;
+      evaluate(1);
+    }
 
-  useEffect(() => {
-    const unsub = client.on('flagsUpdated', () => evaluate());
-    return () => unsub();
-  }, [client, evaluate]);
+    // Unified effect: event subscriptions + cleanup
+    const unsub = client.on('flagsUpdated', () => {
+      evaluationIdRef.current++;
+      evaluate(evaluationIdRef.current);
+    });
+
+    return () => {
+      mountedRef.current = false;
+      unsub();
+    };
+  }, [client, contextKey, evaluate]);
 
   return { flags, loading, error };
 }

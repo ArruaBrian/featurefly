@@ -46,8 +46,18 @@ export class EventEmitter {
     for (const handler of handlers) {
       try {
         handler(payload);
-      } catch {
-        // Swallow listener errors — SDK should never crash from user callbacks
+      } catch (err) {
+        // Emit listenerError for debugging, but prevent infinite recursion
+        if (event !== 'listenerError') {
+          this.emit('listenerError', {
+            event,
+            error: err instanceof Error ? err : new Error(String(err)),
+            handler: handler as unknown as symbol,
+          });
+        } else {
+          // If listenerError handler itself throws, just log — never recurse
+          console.error('[FeatureFly] listenerError handler threw:', err);
+        }
       }
     }
   }

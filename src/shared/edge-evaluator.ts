@@ -1,4 +1,4 @@
-import { FlagDocument, EvaluationContext, FlagValue, FeatureFlag, ExperimentAssignment, TrackingCallback } from './types';
+import { FlagDocument, EvaluationContext, FlagValue, FeatureFlag, ExperimentAssignment, TrackingCallback, EvaluationReason } from './types';
 import { evaluateRules } from './targeting';
 import { isInRollout } from './rollout';
 import { assignVariation } from './experiment';
@@ -8,7 +8,7 @@ import { assignVariation } from './experiment';
  */
 export interface EdgeEvaluationResult {
   value: FlagValue;
-  reason: 'TARGETING_MATCH' | 'PERCENTAGE_ROLLOUT' | 'EXPERIMENT_ASSIGNMENT' | 'DEFAULT' | 'LOCAL_OVERRIDE';
+  reason: EvaluationReason;
   assignment?: ExperimentAssignment;
 }
 
@@ -47,10 +47,46 @@ export class EdgeEvaluator {
 
   /**
    * Update the internal document with a fresh one.
+   * Optimized: skips rebuild if document version hasn't changed.
    */
   updateDocument(document: FlagDocument): void {
+    // Early exit: if document version is the same, no flags can have changed
+    if (this.document.version === document.version) {
+      return;
+    }
+
     this.document = document;
-    this.rebuildIndex();
+    this.diffIndex(document);
+  }
+
+  /**
+   * Diff-based index update: only touches flags that changed.
+   * Falls back to full rebuildIndex() when version info is inconsistent.
+   */
+  private diffIndex(document: FlagDocument): void {
+    const newFlags = document.flags;
+    const newFlagVersions = new Map(newFlags.map(f => [f.slug, f.version]));
+
+    // Remove flags that no longer exist or have decreased in version
+    for (const [slug, existingFlag] of this.flagIndex) {
+      const newVersion = newFlagVersions.get(slug);
+      if (newVersion === undefined) {
+        // Flag was removed from document
+        this.flagIndex.delete(slug);
+      } else if (newVersion < existingFlag.version) {
+        // Version went backwards — can't safely diff, rebuild entirely
+        this.rebuildIndex();
+        return;
+      }
+    }
+
+    // Add or update flags that are newer
+    for (const flag of newFlags) {
+      const existingFlag = this.flagIndex.get(flag.slug);
+      if (!existingFlag || flag.version > existingFlag.version) {
+        this.flagIndex.set(flag.slug, flag);
+      }
+    }
   }
 
   private rebuildIndex(): void {
@@ -75,12 +111,12 @@ export class EdgeEvaluator {
 
     const flag = this.flagIndex.get(slug);
 
-    // If flag doesn't exist in document, return fallback or false
+    // If flag doesn't exist in document, return fallback or NOT_FOUND
     if (!flag) {
       if (slug in this.fallbackDefaults) {
-        return { value: this.fallbackDefaults[slug] as T, reason: 'DEFAULT' };
+        return { value: this.fallbackDefaults[slug] as T, reason: 'FALLBACK' };
       }
-      return { value: false as T, reason: 'DEFAULT' };
+      return { value: false as T, reason: 'NOT_FOUND' };
     }
 
     // Evaluate the flag based on rules, rollout, and experiments

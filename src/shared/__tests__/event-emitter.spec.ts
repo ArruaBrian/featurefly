@@ -124,5 +124,63 @@ describe('EventEmitter', () => {
       emitter.emit('cacheHit', { key: 'key' });
       expect(handler2).toHaveBeenCalledTimes(1);
     });
+
+    it('should emit listenerError when a handler throws', () => {
+      const listenerErrorHandler = jest.fn();
+      emitter.on('listenerError', listenerErrorHandler);
+
+      const testError = new Error('handler failed');
+      const throwingHandler = () => {
+        throw testError;
+      };
+      emitter.on('cacheHit', throwingHandler);
+
+      emitter.emit('cacheHit', { key: 'key' });
+
+      expect(listenerErrorHandler).toHaveBeenCalledTimes(1);
+      const errorPayload = listenerErrorHandler.mock.calls[0][0];
+      expect(errorPayload.event).toBe('cacheHit');
+      expect(errorPayload.error).toBe(testError);
+      // Handler is stored as a symbol identifier (cast from function reference)
+      expect(errorPayload.handler).toBeDefined();
+    });
+
+    it('should continue executing other handlers after one throws', () => {
+      const handler2 = jest.fn();
+      const handler3 = jest.fn();
+      emitter.on('cacheHit', () => {
+        throw new Error('first error');
+      });
+      emitter.on('cacheHit', handler2);
+      emitter.on('cacheHit', () => {
+        throw new Error('third error');
+      });
+      emitter.on('cacheHit', handler3);
+
+      emitter.emit('cacheHit', { key: 'key' });
+
+      expect(handler2).toHaveBeenCalledTimes(1);
+      expect(handler3).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not cause infinite recursion when listenerError handler throws', () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      // Handler that throws on every event including listenerError
+      emitter.on('listenerError', () => {
+        throw new Error('listenerError handler failed');
+      });
+      emitter.on('cacheHit', () => {
+        throw new Error('original error');
+      });
+
+      // Should not throw and should not recurse infinitely
+      expect(() => {
+        emitter.emit('cacheHit', { key: 'key' });
+      }).not.toThrow();
+
+      // Only one listenerError should be emitted (no recursion)
+      consoleSpy.mockRestore();
+    });
   });
 });

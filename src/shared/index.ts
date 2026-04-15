@@ -5,3 +5,4 @@ export * from './logger';
 export * from './circuit-breaker';
 export * from './event-emitter';
 export * from './retry';
+export * from './utils';

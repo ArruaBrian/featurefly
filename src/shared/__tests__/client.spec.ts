@@ -1,5 +1,5 @@
-import { FeatureFlagsClient, FetchError } from '../client';
-import { FeatureFlyEvent } from '../types';
+import { FeatureFlagsClient } from '../client';
+import { stableStringify } from '../utils';
 
 describe('FeatureFlagsClient', () => {
   let mockFetch: jest.Mock;
@@ -13,7 +13,7 @@ describe('FeatureFlagsClient', () => {
     jest.clearAllMocks();
   });
 
-  const createMockResponse = (data: any, status = 200, ok = true) => ({
+  const createMockResponse = (data: unknown, status = 200, ok = true) => ({
     ok,
     status,
     json: async () => data,
@@ -25,6 +25,60 @@ describe('FeatureFlagsClient', () => {
       const client = new FeatureFlagsClient({ baseUrl: 'http://test.com' });
       expect(client).toBeDefined();
       expect(client.isDisposed()).toBe(false);
+    });
+
+    it('should NOT send Authorization header when apiKey is empty string', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ value: true }));
+
+      const client = new FeatureFlagsClient({
+        baseUrl: 'http://test.com',
+        apiKey: '',
+      });
+
+      await client.evaluateFlag('test-flag', false);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://test.com/feature-flags/test-flag/evaluate',
+        expect.objectContaining({
+          headers: expect.not.objectContaining({ Authorization: expect.anything() }),
+        })
+      );
+    });
+
+    it('should NOT send Authorization header when apiKey is only whitespace', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ value: true }));
+
+      const client = new FeatureFlagsClient({
+        baseUrl: 'http://test.com',
+        apiKey: '   ',
+      });
+
+      await client.evaluateFlag('test-flag', false);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://test.com/feature-flags/test-flag/evaluate',
+        expect.objectContaining({
+          headers: expect.not.objectContaining({ Authorization: expect.anything() }),
+        })
+      );
+    });
+
+    it('should send Authorization header with correct Bearer token when apiKey is valid', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ value: true }));
+
+      const client = new FeatureFlagsClient({
+        baseUrl: 'http://test.com',
+        apiKey: 'valid-key',
+      });
+
+      await client.evaluateFlag('test-flag', false);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://test.com/feature-flags/test-flag/evaluate',
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: 'Bearer valid-key' }),
+        })
+      );
     });
   });
 
@@ -108,6 +162,33 @@ describe('FeatureFlagsClient', () => {
     });
   });
 
+  describe('stableStringify', () => {
+    it('should produce same string for objects with different key order', () => {
+      const obj1 = { b: 1, a: 2 };
+      const obj2 = { a: 2, b: 1 };
+      expect(stableStringify(obj1)).toBe(stableStringify(obj2));
+    });
+
+    it('should produce stable cache keys regardless of attribute order', async () => {
+      mockFetch.mockResolvedValue(createMockResponse({ value: true }));
+
+      const client = new FeatureFlagsClient({ baseUrl: 'http://test.com' });
+
+      // Evaluate with attributes in one order
+      await client.evaluateFlag('test-flag', false, {
+        attributes: { b: 1, a: 2 }
+      });
+
+      // Evaluate with same attributes in different order - should hit cache
+      await client.evaluateFlag('test-flag', false, {
+        attributes: { a: 2, b: 1 }
+      });
+
+      // Should only have called fetch once (second call hit cache)
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('CRUD operations', () => {
     it('createFlag should send POST', async () => {
       const mockFlag = { id: '1', slug: 'f1', name: 'F1', category: 'both' as const, defaultValue: true, version: 1, valueType: 'boolean' as const, createdAt: '', updatedAt: '' };
@@ -121,6 +202,62 @@ describe('FeatureFlagsClient', () => {
         'http://test.com/feature-flags',
         expect.objectContaining({ method: 'POST' })
       );
+    });
+  });
+
+  describe('getCachedFlag / getCachedFlags', () => {
+    it('should return undefined when flag is not cached', () => {
+      const client = new FeatureFlagsClient({ baseUrl: 'http://test.com' });
+      expect(client.getCachedFlag('non-existent')).toBeUndefined();
+    });
+
+    it('should return cached value after evaluation', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ value: true }));
+      const client = new FeatureFlagsClient({ baseUrl: 'http://test.com' });
+
+      await client.evaluateFlag('my-flag', false);
+      expect(client.getCachedFlag<boolean>('my-flag')).toBe(true);
+    });
+
+    it('should return bootstrap flags from cache synchronously', () => {
+      const client = new FeatureFlagsClient({
+        baseUrl: 'http://test.com',
+        bootstrapFlags: { 'dark-mode': true, 'new-ui': false },
+      });
+
+      expect(client.getCachedFlag<boolean>('dark-mode')).toBe(true);
+      expect(client.getCachedFlag<boolean>('new-ui')).toBe(false);
+      expect(client.getCachedFlag('unknown')).toBeUndefined();
+    });
+
+    it('should return bootstrap batch flags from getCachedFlags', () => {
+      const bootstrap = { 'dark-mode': true, 'new-ui': false };
+      const client = new FeatureFlagsClient({
+        baseUrl: 'http://test.com',
+        bootstrapFlags: bootstrap,
+      });
+
+      expect(client.getCachedFlags()).toEqual(bootstrap);
+    });
+
+    it('should return undefined from getCachedFlags when no batch was cached', () => {
+      const client = new FeatureFlagsClient({ baseUrl: 'http://test.com' });
+      expect(client.getCachedFlags()).toBeUndefined();
+    });
+
+    it('should scope cached values by context', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ value: 'variant-a' }));
+      const client = new FeatureFlagsClient({ baseUrl: 'http://test.com' });
+
+      const ctx = { workspaceId: 'ws-1' };
+      await client.evaluateFlag('ab-flag', 'control', ctx);
+
+      // Same context → should find it
+      expect(client.getCachedFlag('ab-flag', ctx)).toBe('variant-a');
+      // Different context → not cached
+      expect(client.getCachedFlag('ab-flag', { workspaceId: 'ws-2' })).toBeUndefined();
+      // No context → not cached
+      expect(client.getCachedFlag('ab-flag')).toBeUndefined();
     });
   });
 });

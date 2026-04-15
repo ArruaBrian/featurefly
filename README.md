@@ -3,9 +3,10 @@
 **Lightweight, universal Feature Flags SDK for Node.js and the browser.**
 One package. Backend and frontend. Zero config to start.
 
+[![CI](https://github.com/ArruaBrian/featurefly/actions/workflows/ci.yml/badge.svg)](https://github.com/ArruaBrian/featurefly/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/featurefly.svg)](https://www.npmjs.com/package/featurefly)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-first-blue.svg)](https://www.typescriptlang.org/)
 [![Bundle Size](https://img.shields.io/badge/gzipped-~11KB-green.svg)](#-feature-comparison)
 
 ---

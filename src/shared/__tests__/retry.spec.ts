@@ -73,4 +73,36 @@ describe('withRetry', () => {
     ).rejects.toThrow('no retry');
     expect(fn).toHaveBeenCalledTimes(1);
   });
+
+  it('should treat maxAttempts: 0 as 1 attempt and warn', async () => {
+    const fn = jest.fn().mockRejectedValue(new Error('fail'));
+
+    await expect(
+      withRetry(fn, { maxAttempts: 0, baseDelayMs: 10, maxDelayMs: 100 }, logger),
+    ).rejects.toThrow('fail');
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('maxAttempts must be >= 1'));
+  });
+
+  it('should treat negative maxAttempts as 1 attempt and warn', async () => {
+    const fn = jest.fn().mockRejectedValue(new Error('fail'));
+
+    await expect(
+      withRetry(fn, { maxAttempts: -3, baseDelayMs: 10, maxDelayMs: 100 }, logger),
+    ).rejects.toThrow('fail');
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('maxAttempts must be >= 1'));
+  });
+
+  it('should use default maxAttempts when NaN', async () => {
+    const fn = jest.fn()
+      .mockRejectedValueOnce(new Error('fail 1'))
+      .mockRejectedValueOnce(new Error('fail 2'))
+      .mockResolvedValue('ok');
+
+    const result = await withRetry(fn, { maxAttempts: NaN, baseDelayMs: 10, maxDelayMs: 100 }, logger);
+    expect(result).toBe('ok');
+    // Default maxAttempts is 3, so with 2 failures before success: 2 retries + 1 success = 3 attempts
+    expect(fn).toHaveBeenCalledTimes(3);
+  });
 });

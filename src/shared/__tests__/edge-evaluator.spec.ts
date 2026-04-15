@@ -31,13 +31,14 @@ describe('Edge Evaluator', () => {
     const evaluator = new EdgeEvaluator(document);
     const result = evaluator.evaluate('missing-flag', {});
     expect(result.value).toBe(false);
-    expect(result.reason).toBe('DEFAULT');
+    expect(result.reason).toBe('NOT_FOUND');
   });
 
   it('uses fallback defaults if flag missing', () => {
     const evaluator = new EdgeEvaluator(document, { 'missing-flag': 'blue' });
     const result = evaluator.evaluate('missing-flag', {});
     expect(result.value).toBe('blue');
+    expect(result.reason).toBe('FALLBACK');
   });
 
   it('local overrides win against everything', () => {
@@ -142,12 +143,92 @@ describe('Edge Evaluator', () => {
     const evaluator = new EdgeEvaluator(document);
     expect(evaluator.evaluate('my-flag', {}).value).toBe(true);
 
+    // Note: both document version AND flag version must be incremented for the update to be applied
     const updatedDoc: FlagDocument = {
       ...document,
-      flags: [{ ...mockFlag, defaultValue: false }]
+      flags: [{ ...mockFlag, defaultValue: false, version: 2 }],
+      version: 2 // Bump document version to trigger diff
     };
     evaluator.updateDocument(updatedDoc);
 
     expect(evaluator.evaluate('my-flag', {}).value).toBe(false);
+  });
+
+  describe('updateDocument optimization', () => {
+    it('skips rebuild when document version is the same', () => {
+      const evaluator = new EdgeEvaluator(document);
+      
+      // Same document, same version — should be a no-op
+      evaluator.updateDocument(document);
+      
+      // Flag should still work
+      const result = evaluator.evaluate('my-flag', {});
+      expect(result.value).toBe(true);
+    });
+
+    it('only updates flags with higher version', () => {
+      const flagV1: FeatureFlag = { ...mockFlag, version: 1, defaultValue: true };
+      const docV1: FlagDocument = { ...document, flags: [flagV1], version: 1 };
+      const evaluator = new EdgeEvaluator(docV1);
+
+      // Update only the version, not the value
+      const flagV2: FeatureFlag = { ...mockFlag, version: 2, defaultValue: false };
+      const docV2: FlagDocument = { ...document, flags: [flagV2], version: 2 };
+      evaluator.updateDocument(docV2);
+
+      // Should see the updated value
+      const result = evaluator.evaluate('my-flag', {});
+      expect(result.value).toBe(false);
+    });
+
+    it('removes flags that are no longer in the document', () => {
+      const flagA: FeatureFlag = { ...mockFlag, slug: 'flag-a', version: 1 };
+      const flagB: FeatureFlag = { ...mockFlag, slug: 'flag-b', version: 1 };
+      const docV1: FlagDocument = { ...document, flags: [flagA, flagB], version: 1 };
+      const evaluator = new EdgeEvaluator(docV1);
+
+      expect(evaluator.evaluate('flag-a', {}).value).toBe(true);
+      expect(evaluator.evaluate('flag-b', {}).value).toBe(true);
+
+      // Remove flag-b
+      const docV2: FlagDocument = { ...document, flags: [flagA], version: 2 };
+      evaluator.updateDocument(docV2);
+
+      // flag-a should still work
+      expect(evaluator.evaluate('flag-a', {}).value).toBe(true);
+      // flag-b should be gone (returns default false with NOT_FOUND reason)
+      const result = evaluator.evaluate('flag-b', {});
+      expect(result.value).toBe(false);
+      expect(result.reason).toBe('NOT_FOUND');
+    });
+
+    it('adds new flags to the index', () => {
+      const flagA: FeatureFlag = { ...mockFlag, slug: 'flag-a', version: 1 };
+      const docV1: FlagDocument = { ...document, flags: [flagA], version: 1 };
+      const evaluator = new EdgeEvaluator(docV1);
+
+      // Add flag-b
+      const flagB: FeatureFlag = { ...mockFlag, slug: 'flag-b', version: 1, defaultValue: 'new-value' };
+      const docV2: FlagDocument = { ...document, flags: [flagA, flagB], version: 2 };
+      evaluator.updateDocument(docV2);
+
+      expect(evaluator.evaluate('flag-a', {}).value).toBe(true);
+      expect(evaluator.evaluate('flag-b', {}).value).toBe('new-value');
+    });
+
+    it('falls back to rebuildIndex when flag version decreases', () => {
+      const flagV2: FeatureFlag = { ...mockFlag, version: 2, defaultValue: false };
+      const docV2: FlagDocument = { ...document, flags: [flagV2], version: 2 };
+      const evaluator = new EdgeEvaluator(docV2);
+
+      // Simulate a weird case where version goes from 2 → 1 (e.g. cache reset)
+      const flagV1: FeatureFlag = { ...mockFlag, version: 1, defaultValue: true };
+      const docV1: FlagDocument = { ...document, flags: [flagV1], version: 1 };
+      evaluator.updateDocument(docV1);
+
+      // Should still work (rebuildIndex was called as fallback)
+      const result = evaluator.evaluate('my-flag', {});
+      expect(result.value).toBe(true);
+    });
   });
 });

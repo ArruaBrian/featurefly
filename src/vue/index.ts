@@ -15,6 +15,7 @@ import {
   ref,
   onMounted,
   onUnmounted,
+  onScopeDispose,
   watch,
   type Ref,
   type InjectionKey,
@@ -116,9 +117,12 @@ export function useFeatureFlag<T extends FlagValue = boolean>(
     }
   });
 
-  onUnmounted(() => {
+  const cleanup = () => {
     unsubs.forEach((u) => u());
-  });
+  };
+
+  onUnmounted(cleanup);
+  onScopeDispose(cleanup);
 
   return value;
 }
@@ -171,9 +175,12 @@ export function useAllFlags(
     }
   });
 
-  onUnmounted(() => {
+  const cleanup = () => {
     unsubs.forEach((u) => u());
-  });
+  };
+
+  onUnmounted(cleanup);
+  onScopeDispose(cleanup);
 
   return flags;
 }

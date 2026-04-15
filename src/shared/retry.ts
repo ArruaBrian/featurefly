@@ -22,9 +22,15 @@ export async function withRetry<T>(
 ): Promise<T> {
   const { maxAttempts, baseDelayMs, maxDelayMs } = { ...DEFAULT_RETRY, ...config };
 
+  // Normalize maxAttempts: NaN → default, <= 0 → 1 (with warning)
+  const safeMaxAttempts = isNaN(maxAttempts) ? DEFAULT_RETRY.maxAttempts : Math.max(1, maxAttempts);
+  if (maxAttempts <= 0) {
+    logger.warn(`maxAttempts must be >= 1, treating as 1 (got ${maxAttempts})`);
+  }
+
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= safeMaxAttempts; attempt++) {
     try {
       return await fn();
     } catch (error: unknown) {
@@ -38,7 +44,7 @@ export async function withRetry<T>(
       const delay = Math.min(exponentialDelay + jitter, maxDelayMs);
 
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.warn(`Request failed (attempt ${attempt}/${maxAttempts}): ${errorMessage}. Retrying in ${Math.round(delay)}ms...`);
+      logger.warn(`Request failed (attempt ${attempt}/${safeMaxAttempts}): ${errorMessage}. Retrying in ${Math.round(delay)}ms...`);
 
       onRetry?.(attempt, error);
 

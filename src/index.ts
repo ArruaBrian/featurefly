@@ -20,6 +20,9 @@ export { EventEmitter } from './shared/event-emitter';
 // Retry
 export { withRetry } from './shared/retry';
 
+// Utils
+export { UUID_REGEX } from './utils/uuid';
+
 // New Advanced Modules
 export { EdgeEvaluator } from './shared/edge-evaluator';
 export { FlagStreamClient } from './shared/streaming';

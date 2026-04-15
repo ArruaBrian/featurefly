@@ -14,10 +14,11 @@ const LOG_LEVELS: Record<LogLevel, number> = {
  */
 export class ConsoleLogger implements ILogger {
   private readonly level: number;
-  private readonly prefix = '[FeatureFly]';
+  private readonly prefix: string;
 
-  constructor(level: LogLevel = 'warn') {
+  constructor(level: LogLevel = 'warn', prefix: string = '[FeatureFly]') {
     this.level = LOG_LEVELS[level];
+    this.prefix = prefix;
   }
 
   debug(message: string, ...args: unknown[]): void {

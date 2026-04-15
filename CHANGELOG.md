@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-15
+
+### Security
+- **SSE Authentication**: API keys are no longer exposed in SSE URL query parameters. Streaming now uses a custom fetch-based SSE client (`sse-client.ts`) that sends credentials via `Authorization` header. (#1)
+
+### Added
+- **`getCachedFlag()` / `getCachedFlags()`**: Public synchronous cache access methods on `FeatureFlagsClient`. React/Vue hooks now use these instead of accessing internal cache directly. (#19)
+- **`logPrefix` config option**: Configurable prefix for `ConsoleLogger` messages (default: `[FeatureFly]`). Useful for multi-SDK apps. (#20)
+- **`NOT_FOUND` evaluation reason**: Returned when a flag slug doesn't exist in the edge document. (#11)
+- **`listenerError` event**: Emitted when an event listener throws, with anti-recursion protection. (#12)
+- **`flagsUpdated` slugs**: The `flagsUpdated` event now includes an optional `slugs` array for selective cache invalidation. (#9)
+- **SSE anti-replay**: `Last-Event-ID` header tracking and version gap detection on SSE reconnect. (#10)
+- **Stable cache keys**: `stableStringify()` utility ensures deterministic key ordering in cache keys. (#13)
+- **apiKey validation**: Empty/whitespace-only API keys are normalized to `undefined`. (#15)
+- **Examples**: Added `examples/` directory with Node.js, React/Next.js, Vue/Nuxt, and Edge evaluation examples. (#14)
+- **CI/CD**: GitHub Actions workflows for CI (Node 18/20/22) and Release (npm publish with provenance). (#16)
+- **TypeDoc config**: Added `typedoc.json` and `docs` npm script for API documentation generation. (#17)
+- **README badges**: CI, npm version, TypeScript, and License badges. (#18)
+- **PR template**: `.github/PULL_REQUEST_TEMPLATE.md`. (#16)
+
+### Fixed
+- **Retry `maxAttempts=0`**: Values <= 0 are now normalized to 1 (with warning). NaN uses default of 3. (#2)
+- **Cache timer validation**: TTL values are validated; `CacheOptions` supports `logger`; `destroy()` is idempotent. (#3)
+- **React hooks memory leaks**: Refactored with `mountedRef`, `evaluationIdRef`, race condition protection, and bootstrap sync check. (#4)
+- **Vue `useAllFlags` cleanup**: Added `onScopeDispose` and unified cleanup pattern. (#5)
+- **SemVer parser**: Rewritten with token-based parsing, spec-compliant with SemVer 2.0.0 Section 11. (#6)
+- **Edge evaluator diffing**: Version-aware `diffIndex()` for selective re-evaluation with early exit. (#7)
+
+### Changed
+- **React hooks**: Removed internal `buildCacheKey` helper; hooks now use public `getCachedFlag()`/`getCachedFlags()` API.
+
 ## [0.2.4] - 2026-03-01
 
 ### Fixed

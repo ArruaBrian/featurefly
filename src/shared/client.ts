@@ -24,6 +24,7 @@ import { withRetry } from './retry';
 import { FlagStreamClient } from './streaming';
 import { EdgeEvaluator } from './edge-evaluator';
 import { ImpactMetrics, MetricsSnapshot } from './metrics';
+import { stableStringify } from './utils';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DEFAULTS
@@ -45,8 +46,8 @@ const DEFAULT_CIRCUIT_BREAKER: CircuitBreakerConfig = {
 
 // Custom Fetch Error class to mirror Axios minimal behavior
 export class FetchError extends Error {
-  response?: { status: number; data?: any };
-  constructor(message: string, status?: number, data?: any) {
+  response?: { status: number; data?: unknown };
+  constructor(message: string, status?: number, data?: unknown) {
     super(message);
     this.name = 'FetchError';
     if (status) {
@@ -103,7 +104,7 @@ export class FeatureFlagsClient {
 
   constructor(config: FeatureFlagsConfig) {
     // Logger
-    this.logger = config.logger ?? new ConsoleLogger(config.logLevel ?? 'warn');
+    this.logger = config.logger ?? new ConsoleLogger(config.logLevel ?? 'warn', config.logPrefix);
 
     // Cache
     const cacheTtl = config.cacheEnabled === false ? 0 : (config.cacheTtlMs ?? DEFAULT_CACHE_TTL);
@@ -151,9 +152,10 @@ export class FeatureFlagsClient {
     this.baseUrl = config.baseUrl;
     this.timeout = config.timeout ?? DEFAULT_TIMEOUT;
     this.withCredentials = config.withCredentials ?? false;
+    const safeApiKey = config.apiKey?.trim() || undefined;
     this.headers = {
       'Content-Type': 'application/json',
-      ...(config.apiKey && { Authorization: `Bearer ${config.apiKey}` }),
+      ...(safeApiKey && { Authorization: `Bearer ${safeApiKey}` }),
       ...config.headers,
     };
     this.requestInterceptor = config.requestInterceptor;
@@ -173,7 +175,7 @@ export class FeatureFlagsClient {
       const streamConfig = typeof config.streaming === 'object' ? config.streaming : {};
       this.streamClient = new FlagStreamClient(
         config.baseUrl,
-        config.apiKey,
+        safeApiKey,
         streamConfig,
         this.logger,
         this.events
@@ -183,11 +185,18 @@ export class FeatureFlagsClient {
       this.streamClient.connect();
       
       // When stream notifies of updates, we should refresh the edge document if in edge mode
-      // or simply clear the cache if in remote mode
-      this.events.on('flagsUpdated', () => {
+      // or selectively invalidate cache entries if in remote mode
+      this.events.on('flagsUpdated', ({ slugs }) => {
         if (this.edgeEvaluator) {
           this.refreshEdgeDocument().catch(e => this.logger.error('Failed to refresh edge doc on stream update', e));
+        } else if (slugs?.length) {
+          // Selective invalidation: delete only affected slugs + batch-evaluate
+          for (const slug of slugs) {
+            this.cache.delete(this.buildCacheKey('evaluate', slug));
+          }
+          this.cache.delete(this.buildCacheKey('batch-evaluate'));
         } else {
+          // Backward compat: no slug info means full cache clear (legacy server)
           this.cache.clear();
         }
       });
@@ -326,6 +335,31 @@ export class FeatureFlagsClient {
    */
   once<E extends FeatureFlyEvent>(event: E, handler: EventHandler<E>): () => void {
     return this.events.once(event, handler);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHE ACCESS (for framework integrations)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Synchronously read a cached flag value without triggering evaluation.
+   * Returns `undefined` if the flag is not in cache.
+   * Useful for React/Vue hooks to avoid loading states when `bootstrapFlags` was provided.
+   */
+  getCachedFlag<T extends FlagValue>(slug: string, context?: EvaluationContext): T | undefined {
+    const cacheKey = this.buildCacheKey('evaluate', slug, context);
+    const cached = this.cache.get<T>(cacheKey);
+    return cached.hit ? cached.value : undefined;
+  }
+
+  /**
+   * Synchronously read all cached batch-evaluated flags.
+   * Returns `undefined` if no batch evaluation has been cached.
+   */
+  getCachedFlags(context?: EvaluationContext): Record<string, FlagValue> | undefined {
+    const cacheKey = this.buildCacheKey('batch-evaluate', undefined, context);
+    const cached = this.cache.get<Record<string, FlagValue>>(cacheKey);
+    return cached.hit ? cached.value : undefined;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -782,10 +816,7 @@ export class FeatureFlagsClient {
     if (context?.workspaceId) parts.push(`w:${context.workspaceId}`);
     if (context?.userId) parts.push(`u:${context.userId}`);
     if (context?.attributes) {
-      const sorted = Object.keys(context.attributes).sort();
-      for (const k of sorted) {
-        parts.push(`${k}:${context.attributes[k]}`);
-      }
+      parts.push(stableStringify(context.attributes));
     }
     return parts.join(':');
   }

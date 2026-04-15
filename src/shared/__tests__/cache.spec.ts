@@ -1,8 +1,21 @@
-import { InMemoryCache } from '../cache';
+import { InMemoryCache, CacheOptions } from '../cache';
+import { ILogger } from '../types';
 
 describe('InMemoryCache', () => {
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  // Mock logger for testing warnings
+  const mockLogger: ILogger = {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('constructor', () => {
@@ -17,6 +30,45 @@ describe('InMemoryCache', () => {
     it('should create a disabled cache when TTL is 0', () => {
       const cache = new InMemoryCache(0);
       expect(cache.getStats().enabled).toBe(false);
+      cache.destroy();
+    });
+
+    it('should use default TTL when TTL is NaN', () => {
+      const options: CacheOptions = { logger: mockLogger };
+      const cache = new InMemoryCache(NaN, options);
+      expect(cache.getStats().enabled).toBe(true);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        'Invalid cache TTL NaNms. Using default 60000ms.',
+      );
+      cache.destroy();
+    });
+
+    it('should use default TTL when TTL is negative', () => {
+      const options: CacheOptions = { logger: mockLogger };
+      const cache = new InMemoryCache(-5, options);
+      expect(cache.getStats().enabled).toBe(true);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        'Invalid cache TTL -5ms. Using default 60000ms.',
+      );
+      cache.destroy();
+    });
+
+    it('should warn when TTL is below 1000ms', () => {
+      const options: CacheOptions = { logger: mockLogger };
+      const cache = new InMemoryCache(100, options);
+      expect(cache.getStats().enabled).toBe(true);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        'Cache TTL 100ms is below 1000ms. Cleanup runs every max(100, 30000)ms.',
+      );
+      cache.destroy();
+    });
+
+    it('should accept logger in options', () => {
+      const options: CacheOptions = { logger: mockLogger };
+      const cache = new InMemoryCache(60_000, options);
+      cache.set('key', 'value');
+      expect(cache.get('key')).toEqual({ hit: true, value: 'value' });
+      expect(mockLogger.debug).not.toHaveBeenCalled();
       cache.destroy();
     });
   });
@@ -152,6 +204,16 @@ describe('InMemoryCache', () => {
       const cache = new InMemoryCache(60_000);
       cache.set('key', 'value');
       cache.destroy();
+      expect(cache.getStats().size).toBe(0);
+    });
+
+    it('should be idempotent - calling destroy twice should not throw', () => {
+      const cache = new InMemoryCache(60_000);
+      cache.set('key', 'value');
+      expect(() => {
+        cache.destroy();
+        cache.destroy();
+      }).not.toThrow();
       expect(cache.getStats().size).toBe(0);
     });
   });
