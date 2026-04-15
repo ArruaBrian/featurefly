@@ -7,7 +7,8 @@ One package. Backend and frontend. Zero config to start.
 [![npm version](https://img.shields.io/npm/v/featurefly.svg)](https://www.npmjs.com/package/featurefly)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Bundle Size](https://img.shields.io/badge/gzipped-~11KB-green.svg)](#-feature-comparison)
+[![Bundle Size](https://img.shields.io/badge/gzipped%20core-~11KB-green.svg)](https://www.npmjs.com/package/featurefly)
+[![Bundle Size](https://img.shields.io/badge/gzipped%20full-~22KB-green.svg)](#-feature-comparison)
 
 ---
 
@@ -60,24 +61,26 @@ npm install featurefly
 
 ### Tree-Shakeable Entry Points
 
-FeatureFly supports granular imports for optimal bundle size:
+FeatureFly supports granular imports for optimal bundle size. All sizes are gzipped.
 
-| Entry Point | Bundle (est.) | Use Case |
-|-------------|---------------|----------|
-| `featurefly` | Full (~22KB) | Complete SDK, backwards compatible |
-| `featurefly/core` | Minimal (~8KB) | Vanilla JS, Node.js, Serverless |
-| `featurefly/react` | Core + React (~12KB) | React 18+ applications |
-| `featurefly/vue` | Core + Vue (~12KB) | Vue 3 applications |
-| `featurefly/advanced` | Edge/Streaming/Metrics (~11KB) | Advanced features only |
+| Entry Point | Gzipped Size | Lazy Loaded | Use Case |
+|-------------|--------------|-------------|----------|
+| `featurefly` | ~11KB core | ~13KB on-demand | Complete SDK, backwards compatible |
+| `featurefly/core` | ~11KB | - | Vanilla JS, Node.js, Serverless |
+| `featurefly/react` | ~11KB + ~2KB | - | React 18+ applications |
+| `featurefly/vue` | ~11KB + ~2KB | - | Vue 3 applications |
+| `featurefly/advanced` | - | ~13KB | EdgeEvaluator, Streaming, Metrics, targeting |
+
+> **Note:** Core bundle (~11KB gzipped) includes Client + Cache + Retry + Circuit Breaker + Event Emitter + Logger. Advanced features (EdgeEvaluator, targeting, streaming, metrics, experiments) are **lazy loaded on-demand** when first used.
 
 ```typescript
-// Minimal - tree-shakeable
+// Minimal - tree-shakeable core (~11KB gzipped)
 import { FeatureFlagsClient } from 'featurefly/core';
 
-// React - hooks included
+// React - hooks included (~13KB gzipped total)
 import { FeatureFlyProvider, useFeatureFlag } from 'featurefly/react';
 
-// Advanced features only (Edge evaluation, Streaming, Metrics)
+// Advanced features loaded on-demand (~13KB additional, loaded once)
 import { EdgeEvaluator, FlagStreamClient } from 'featurefly/advanced';
 ```
 
@@ -511,28 +514,48 @@ const client = new FeatureFlagsClient({
 Client-side telemetry collected passively, no external calls.
 
 ```typescript
-const metrics = client.getImpactMetrics();
+// Get metrics snapshot (async - loads ImpactMetrics module on-demand)
+const metrics = await client.getImpactMetrics();
 
-console.log(metrics.totalEvaluations); // 1523
-console.log(metrics.cacheHitRate); // 0.87
-console.log(metrics.latency.p50); // 2ms
-console.log(metrics.latency.p95); // 12ms
-console.log(metrics.latency.p99); // 45ms
+if (metrics) {
+  console.log(metrics.totalEvaluations); // 1523
+  console.log(metrics.cacheHitRate); // 0.87
+  console.log(metrics.latency.p50); // 2ms
+  console.log(metrics.latency.p95); // 12ms
+  console.log(metrics.latency.p99); // 45ms
 
-// Per-flag detail
-console.log(metrics.flags["my-flag"].evaluations); // 42
+  // Per-flag detail
+  console.log(metrics.flags["my-flag"].evaluations); // 42
 
-// Experiment exposures
-console.log(metrics.experiments["checkout-exp"].exposures); // 300
+  // Experiment exposures
+  console.log(metrics.experiments["checkout-exp"].exposures); // 300
+}
 
-// Reset all counters
-client.resetMetrics();
+// Reset all counters (async)
+await client.resetMetrics();
+```
+
+### Analytics
+
+```typescript
+// Get flag statistics overview
+const stats = await client.getFlagStats();
+console.log(stats.totalFlags);
+console.log(stats.enabledFlags);
+
+// Get flags filtered by category
+const frontendFlags = await client.getFlagsByCategory('frontend');
+const backendFlags = await client.getFlagsByCategory('backend');
+const bothFlags = await client.getFlagsByCategory('both');
+
+// Get flags by target service
+const apiFlags = await client.getFlagsByTargetService('api-gateway');
 ```
 
 ### Event System
 
 ```typescript
-// Flag evaluated (with timing)
+// Subscribe to events
 client.on("flagEvaluated", ({ slug, value, reason, durationMs }) => {
   analytics.track("flag_check", { slug, value, reason, durationMs });
 });
@@ -546,14 +569,33 @@ client.on("flagChanged", ({ slug, previousValue, newValue }) => {
 client.on("circuitOpen", ({ state, failures }) => {
   alerting.send(`Circuit opened after ${failures} failures`);
 });
+client.on("circuitClosed", () => console.log("Circuit closed"));
+client.on("circuitHalfOpen", () => console.log("Circuit half-open"));
 
 // Cache
 client.on("cacheHit", ({ key }) => monitor.increment("cache.hit"));
 client.on("cacheMiss", ({ key }) => monitor.increment("cache.miss"));
+client.on("cacheCleared", () => console.log("Cache cleared"));
 
 // Streaming
 client.on("streamConnected", () => console.log("SSE connected"));
 client.on("streamDisconnected", () => console.log("SSE lost"));
+client.on("flagsUpdated", ({ slugs }) => console.log(`Flags updated: ${slugs?.join(', ') || 'all'}`));
+
+// Request failures
+client.on("requestFailed", ({ endpoint, error, attempt }) => {
+  console.error(`Request to ${endpoint} failed (attempt ${attempt}): ${error}`);
+});
+
+// Listener errors
+client.on("listenerError", ({ event, error }) => {
+  console.error(`Error in ${event} listener:`, error);
+});
+
+// Subscribe once (auto-unsubscribes after first event)
+client.once("flagEvaluated", ({ slug }) => {
+  console.log(`First evaluation for ${slug}`);
+});
 
 // Unsubscribe
 const unsubscribe = client.on("flagEvaluated", handler);
@@ -574,20 +616,53 @@ client.removeLocalOverride("experimental-ui");
 client.clearLocalOverrides();
 ```
 
+### Cache Access (Synchronous)
+
+```typescript
+// Get a single cached flag value (sync, no HTTP)
+// Returns undefined if not in cache
+const cachedValue = client.getCachedFlag<boolean>("my-flag", { userId: "123" });
+if (cachedValue !== undefined) {
+  console.log("From cache:", cachedValue);
+}
+
+// Get all cached batch-evaluated flags (sync)
+// Returns undefined if no batch evaluation was cached
+const allCached = client.getCachedFlags({ workspaceId: "ws-123" });
+if (allCached) {
+  console.log("All cached flags:", allCached);
+}
+
+// Clear cache
+client.clearCache();
+
+// Get cache statistics
+const stats = client.getCacheStats();
+console.log(`Cache size: ${stats.size}, keys: ${stats.keys.length}, enabled: ${stats.enabled}`);
+```
+
+### Edge Evaluation (Advanced)
+
+```typescript
+// Load edge document for offline evaluation mode
+// After calling this, evaluations happen locally (zero HTTP)
+await client.loadEdgeDocument();
+
+// Check if streaming is active
+client.startStreaming(); // Start SSE connection
+client.stopStreaming(); // Stop SSE connection
+```
+
 ### Utilities
 
 ```typescript
-// Cache
-client.clearCache();
-client.getCacheStats(); // { size, keys, enabled }
-
 // Circuit breaker
-client.getCircuitBreakerState(); // { state, failures }
-client.resetCircuitBreaker();
+client.getCircuitBreakerState(); // { state, 'open'|'closed'|'half-open', failures }
+client.resetCircuitBreaker(); // Manually reset to closed state
 
 // Lifecycle
-client.dispose(); // Release timers, listeners, metrics, SSE
-client.isDisposed(); // true
+client.dispose(); // Release timers, listeners, metrics, SSE connections
+client.isDisposed(); // true if disposed
 ```
 
 ---
@@ -713,7 +788,7 @@ Built-in, zero-config resilience. No plugins needed.
 | TypeScript first                         |     ✅     |      ✅       |      ⚠️       |     ✅     |    ⚠️     |
 | Open source                              |   ✅ MIT   | ✅ Apache 2.0 | ✅ Apache 2.0 |   ✅ MIT   | ✅ BSD-3  |
 |                                          |            |               |               |            |           |
-| **Bundle size (gzipped)**                | **~11 KB** |   ~100 KB+    |    ~336 KB    |   ~9 KB    |  ~50 KB+  |
+| **Bundle size (gzipped)**                | **~11 KB core<br>~22 KB full** |   ~100 KB+    |    ~336 KB    |   ~9 KB    |  ~50 KB+  |
 | **Runtime dependencies**                 |   **0**    |      3+       |      5+       |   **0**    |    2+     |
 | **Pricing**                              |  **Free**  |     Paid      |   Free/Paid   |  **Free**  | Free/Paid |
 

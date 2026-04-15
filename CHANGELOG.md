@@ -8,12 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.2] - 2026-04-15
 
 ### Added
-- **Tree-shakeable entry points**: New package structure with granular imports for better tree-shaking. Import from `featurefly/core` for vanilla JS/Node.js (~8KB), `featurefly/react` for React, or `featurefly/vue` for Vue. Main `featurefly` entry re-exports everything with `React`/`Vue` suffixes for disambiguation.
+- **Tree-shakeable entry points**: New package structure with granular imports for optimal tree-shaking:
+  - `featurefly/core` (~11KB gzipped): Client + Cache + Retry + Circuit Breaker + Event Emitter + Logger
+  - `featurefly/react` (~13KB gzipped): Core + React hooks
+  - `featurefly/vue` (~13KB gzipped): Core + Vue composables
+  - `featurefly/advanced` (~13KB gzipped, lazy loaded): EdgeEvaluator, FlagStreamClient, ImpactMetrics, targeting, rollout, experiments
 - **`featurefly/advanced`**: New entry point for EdgeEvaluator, FlagStreamClient, ImpactMetrics, targeting, rollout, and experiment modules.
 
 ### Changed
 - **Breaking naming**: React hooks (`useFeatureFlag`, `useAllFlags`) are exported as `useFeatureFlagReact`/`useAllFlagsReact` from main entry. Use `featurefly/react` for unchanged names.
-- **Lazy loading**: EdgeEvaluator, FlagStreamClient, and ImpactMetrics are now loaded on-demand via dynamic imports, reducing initial bundle size.
+- **Lazy loading**: EdgeEvaluator, FlagStreamClient, ImpactMetrics, targeting, rollout, and experiments are now loaded on-demand via dynamic imports, reducing initial bundle size to ~11KB gzipped (core only).
+- **Bundle sizes**: Updated documentation to reflect actual gzipped sizes: core ~11KB, full SDK ~22KB when all features loaded.
 
 ## [0.3.1] - 2026-04-15
 

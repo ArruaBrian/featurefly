@@ -175,7 +175,7 @@ export class FeatureFlagsClient {
 
   private readonly safeApiKey: string | undefined;
   private readonly streamingConfig: unknown;
-  private readonly edgeDocumentConfig: FlagDocument | undefined;
+  private edgeDocumentConfig: FlagDocument | undefined;
   private readonly trackingCallbackConfig: unknown;
   private readonly metricsConfig: boolean;
   private metricsInitialized = false;
@@ -325,6 +325,8 @@ export class FeatureFlagsClient {
     const doc = await this.fetchWithResiliency(async () => {
       return await this.request<FlagDocument>('/feature-flags/document');
     });
+
+    this.edgeDocumentConfig = doc;
 
     const evaluator = await this.getEdgeEvaluator();
     evaluator.updateDocument(doc);
