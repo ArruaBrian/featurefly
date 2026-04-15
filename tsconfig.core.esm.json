@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.core.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "outDir": "./dist/esm/core",
+    "declaration": true,
+    "declarationDir": "./dist/esm/core"
+  }
+}

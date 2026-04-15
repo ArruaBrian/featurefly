@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.vue.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "outDir": "./dist/esm/vue",
+    "declaration": true,
+    "declarationDir": "./dist/esm/vue"
+  }
+}

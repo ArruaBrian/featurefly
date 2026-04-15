@@ -1,90 +1,21 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// FeatureFly - Framework-Agnostic Feature Flags SDK
+// FeatureFly - Complete SDK
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Re-exports from all entry points for backwards compatibility.
+// For smaller bundles, import from specific entry points:
+//   import from 'featurefly/core'  (vanilla JS, Node.js)
+//   import from 'featurefly/react' (React)
+//   import from 'featurefly/vue'   (Vue)
+//
+// Note: React and Vue hooks have conflicting names (useFeatureFlag, useAllFlags).
+// The main entry exports them with 'React'/'Vue' suffix for disambiguation.
+//
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Core client
-export { FeatureFlagsClient } from './shared/client';
+export * from './core';
 
-// Cache
-export { InMemoryCache } from './shared/cache';
+export { FeatureFlyProvider, useFeatureFlag as useFeatureFlagReact, useAllFlags as useAllFlagsReact } from './react';
+export type { UseFeatureFlagResult, UseAllFlagsResult } from './react';
 
-// Logger
-export { ConsoleLogger } from './shared/logger';
-
-// Circuit Breaker
-export { CircuitBreaker, CircuitOpenError } from './shared/circuit-breaker';
-
-// Event Emitter
-export { EventEmitter } from './shared/event-emitter';
-
-// Retry
-export { withRetry } from './shared/retry';
-
-// Utils
-export { UUID_REGEX } from './utils/uuid';
-
-// New Advanced Modules
-export { EdgeEvaluator } from './shared/edge-evaluator';
-export { FlagStreamClient } from './shared/streaming';
-export { evaluateRules, evaluateRule } from './shared/targeting';
-export { isInRollout, getHashBucket } from './shared/rollout';
-export { assignVariation } from './shared/experiment';
-export { ImpactMetrics } from './shared/metrics';
-
-// Types
-export type {
-  // Core
-  FeatureFlag,
-  WorkspaceFeatureFlag,
-  FlagValue,
-  FlagValueType,
-
-  // CRUD
-  CreateFlagData,
-  UpdateFlagData,
-  SetWorkspaceFlagData,
-
-  // Evaluation
-  EvaluationContext,
-  EvaluationReason,
-  FeatureFlagEvaluation,
-  BatchEvaluation,
-
-  // Stats
-  FeatureFlagStats,
-
-  // Config
-  FeatureFlagsConfig,
-  RequestInterceptor,
-  RetryConfig,
-  CircuitBreakerConfig,
-  LogLevel,
-  ILogger,
-
-  // Events
-  FeatureFlyEvent,
-  EventHandler,
-  EventPayloadMap,
-  FlagEvaluatedPayload,
-  FlagChangedPayload,
-  RequestFailedPayload,
-  CircuitStatePayload,
-
-  // Advanced Types
-  TargetingOperator,
-  TargetingCondition,
-  TargetingRule,
-  RolloutConfig,
-  Variation,
-  Experiment,
-  ExperimentAssignment,
-  TrackingCallback,
-  StreamingConfig,
-  FlagDocument,
-} from './shared/types';
-
-export type {
-  MetricsSnapshot,
-  FlagMetric,
-  ExperimentMetric,
-} from './shared/metrics';
+export { FeatureFlyPlugin, useFeatureFlag as useFeatureFlagVue, useAllFlags as useAllFlagsVue } from './vue';

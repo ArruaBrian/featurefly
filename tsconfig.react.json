@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/cjs/react",
+    "declaration": true,
+    "declarationDir": "./dist/cjs/react"
+  },
+  "include": [
+    "src/react/index.ts",
+    "src/shared/client.ts",
+    "src/shared/cache.ts",
+    "src/shared/logger.ts",
+    "src/shared/circuit-breaker.ts",
+    "src/shared/event-emitter.ts",
+    "src/shared/retry.ts",
+    "src/shared/metrics.ts",
+    "src/shared/types.ts",
+    "src/shared/utils.ts",
+    "src/utils/uuid.ts"
+  ],
+  "exclude": ["**/*.spec.ts", "**/*.test.ts", "**/__tests__/**"]
+}
