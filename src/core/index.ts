@@ -3,7 +3,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // Minimal core SDK: FeatureFlagsClient + resilience primitives.
-// Excludes: EdgeEvaluator, Streaming, SSE (use 'featurefly/react' or 'featurefly/vue')
+// Excludes: EdgeEvaluator, Streaming, Metrics, targeting, rollouts, experiments.
+// Import advanced modules from 'featurefly/advanced'.
 //
 // Usage:
 //   import { FeatureFlagsClient } from 'featurefly/core';
@@ -16,7 +17,6 @@ export { ConsoleLogger } from '../shared/logger';
 export { CircuitBreaker, CircuitOpenError } from '../shared/circuit-breaker';
 export { EventEmitter } from '../shared/event-emitter';
 export { withRetry } from '../shared/retry';
-export { ImpactMetrics } from '../shared/metrics';
 export { UUID_REGEX } from '../utils/uuid';
 
 export type { FeatureFlag } from '../shared/types';
@@ -44,6 +44,3 @@ export type { FlagEvaluatedPayload } from '../shared/types';
 export type { FlagChangedPayload } from '../shared/types';
 export type { RequestFailedPayload } from '../shared/types';
 export type { CircuitStatePayload } from '../shared/types';
-export type { MetricsSnapshot } from '../shared/metrics';
-export type { FlagMetric } from '../shared/metrics';
-export type { ExperimentMetric } from '../shared/metrics';

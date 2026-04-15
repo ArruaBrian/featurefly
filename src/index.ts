@@ -19,3 +19,5 @@ export { FeatureFlyProvider, useFeatureFlag as useFeatureFlagReact, useAllFlags 
 export type { UseFeatureFlagResult, UseAllFlagsResult } from './react';
 
 export { FeatureFlyPlugin, useFeatureFlag as useFeatureFlagVue, useAllFlags as useAllFlagsVue } from './vue';
+
+export * from './advanced';

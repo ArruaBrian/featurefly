@@ -58,6 +58,29 @@ npm install featurefly
 > npm install featurefly vue
 > ```
 
+### Tree-Shakeable Entry Points
+
+FeatureFly supports granular imports for optimal bundle size:
+
+| Entry Point | Bundle (est.) | Use Case |
+|-------------|---------------|----------|
+| `featurefly` | Full (~22KB) | Complete SDK, backwards compatible |
+| `featurefly/core` | Minimal (~8KB) | Vanilla JS, Node.js, Serverless |
+| `featurefly/react` | Core + React (~12KB) | React 18+ applications |
+| `featurefly/vue` | Core + Vue (~12KB) | Vue 3 applications |
+| `featurefly/advanced` | Edge/Streaming/Metrics (~11KB) | Advanced features only |
+
+```typescript
+// Minimal - tree-shakeable
+import { FeatureFlagsClient } from 'featurefly/core';
+
+// React - hooks included
+import { FeatureFlyProvider, useFeatureFlag } from 'featurefly/react';
+
+// Advanced features only (Edge evaluation, Streaming, Metrics)
+import { EdgeEvaluator, FlagStreamClient } from 'featurefly/advanced';
+```
+
 ---
 
 ## 🚀 Quick Start

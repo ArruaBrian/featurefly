@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.advanced.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "outDir": "./dist/esm/advanced",
+    "declaration": true,
+    "declarationDir": "./dist/esm/advanced"
+  }
+}

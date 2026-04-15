@@ -21,10 +21,8 @@ import { ConsoleLogger } from './logger';
 import { CircuitBreaker } from './circuit-breaker';
 import { EventEmitter } from './event-emitter';
 import { withRetry } from './retry';
-import { FlagStreamClient } from './streaming';
-import { EdgeEvaluator } from './edge-evaluator';
-import { ImpactMetrics, MetricsSnapshot } from './metrics';
 import { stableStringify } from './utils';
+import type { MetricsSnapshot } from './metrics';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DEFAULTS
@@ -97,9 +95,11 @@ export class FeatureFlagsClient {
   private readonly localOverrides: Record<string, FlagValue>;
   private readonly fallbackDefaults: Record<string, FlagValue>;
   private readonly previousValues = new Map<string, FlagValue>();
-  private streamClient?: FlagStreamClient;
-  private edgeEvaluator?: EdgeEvaluator;
-  private readonly metrics: ImpactMetrics;
+  private streamClient?: { connect(): void; disconnect(): void; dispose(): void };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private edgeEvaluator?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private metrics?: any;
   private disposed = false;
 
   constructor(config: FeatureFlagsConfig) {
@@ -152,60 +152,87 @@ export class FeatureFlagsClient {
     this.baseUrl = config.baseUrl;
     this.timeout = config.timeout ?? DEFAULT_TIMEOUT;
     this.withCredentials = config.withCredentials ?? false;
-    const safeApiKey = config.apiKey?.trim() || undefined;
+    this.safeApiKey = config.apiKey?.trim() || undefined;
     this.headers = {
       'Content-Type': 'application/json',
-      ...(safeApiKey && { Authorization: `Bearer ${safeApiKey}` }),
+      ...(this.safeApiKey && { Authorization: `Bearer ${this.safeApiKey}` }),
       ...config.headers,
     };
     this.requestInterceptor = config.requestInterceptor;
 
-    // Edge Evaluator Initialization
-    if (config.edgeDocument) {
+    // LAZY: Store streaming config for lazy initialization
+    this.streamingConfig = config.streaming;
+
+    // LAZY: Store edgeDocument for lazy initialization
+    this.edgeDocumentConfig = config.edgeDocument;
+    this.trackingCallbackConfig = config.trackingCallback;
+
+    // Impact Metrics (LAZY - store config for later)
+    this.metricsConfig = true;
+
+    this.logger.debug(`Initialized with baseUrl=${config.baseUrl}, cache=${cacheTtl}ms, retry=${this.retryConfig.maxAttempts}`);
+  }
+
+  private readonly safeApiKey: string | undefined;
+  private readonly streamingConfig: unknown;
+  private readonly edgeDocumentConfig: FlagDocument | undefined;
+  private readonly trackingCallbackConfig: unknown;
+  private readonly metricsConfig: boolean;
+  private metricsInitialized = false;
+
+  // ─── LAZY LOADING GETTERS ────────────────────────────────────────────────────
+
+  private async getEdgeEvaluator(): Promise<NonNullable<typeof this.edgeEvaluator>> {
+    if (!this.edgeEvaluator) {
+      const { EdgeEvaluator } = await import('./edge-evaluator');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.edgeEvaluator = new EdgeEvaluator(
-        config.edgeDocument,
+        this.edgeDocumentConfig!,
         this.fallbackDefaults,
-        config.trackingCallback
+        this.trackingCallbackConfig as (assignment: import('./types').ExperimentAssignment) => void
       );
       this.logger.info('Edge evaluator initialized from provided document');
     }
+    return this.edgeEvaluator as NonNullable<typeof this.edgeEvaluator>;
+  }
 
-    // Streaming Initialization
-    if (config.streaming) {
-      const streamConfig = typeof config.streaming === 'object' ? config.streaming : {};
-      this.streamClient = new FlagStreamClient(
-        config.baseUrl,
-        safeApiKey,
-        streamConfig,
-        this.logger,
-        this.events
-      );
-      
-      // Auto-connect stream on boot
-      this.streamClient.connect();
-      
-      // When stream notifies of updates, we should refresh the edge document if in edge mode
-      // or selectively invalidate cache entries if in remote mode
-      this.events.on('flagsUpdated', ({ slugs }) => {
-        if (this.edgeEvaluator) {
-          this.refreshEdgeDocument().catch(e => this.logger.error('Failed to refresh edge doc on stream update', e));
-        } else if (slugs?.length) {
-          // Selective invalidation: delete only affected slugs + batch-evaluate
-          for (const slug of slugs) {
-            this.cache.delete(this.buildCacheKey('evaluate', slug));
-          }
-          this.cache.delete(this.buildCacheKey('batch-evaluate'));
-        } else {
-          // Backward compat: no slug info means full cache clear (legacy server)
-          this.cache.clear();
-        }
-      });
+  private async getMetrics(): Promise<NonNullable<typeof this.metrics>> {
+    if (!this.metrics) {
+      const { ImpactMetrics } = await import('./metrics');
+      this.metrics = new ImpactMetrics(this.events);
+      this.metricsInitialized = true;
     }
+    return this.metrics as NonNullable<typeof this.metrics>;
+  }
 
-    // Impact Metrics
-    this.metrics = new ImpactMetrics(this.events);
+  private async ensureStreaming(): Promise<void> {
+    if (this.streamClient) return;
 
-    this.logger.debug(`Initialized with baseUrl=${config.baseUrl}, cache=${cacheTtl}ms, retry=${this.retryConfig.maxAttempts}`);
+    const { FlagStreamClient } = await import('./streaming');
+    const streamConfig = typeof this.streamingConfig === 'object' ? this.streamingConfig : {};
+
+    this.streamClient = new FlagStreamClient(
+      this.baseUrl,
+      this.safeApiKey,
+      streamConfig as { reconnectDelayMs?: number; maxReconnectDelayMs?: number },
+      this.logger,
+      this.events
+    );
+
+    this.streamClient.connect();
+
+    this.events.on('flagsUpdated', ({ slugs }) => {
+      if (this.edgeEvaluator) {
+        this.refreshEdgeDocument().catch(e => this.logger.error('Failed to refresh edge doc on stream update', e));
+      } else if (slugs?.length) {
+        for (const slug of slugs) {
+          this.cache.delete(this.buildCacheKey('evaluate', slug));
+        }
+        this.cache.delete(this.buildCacheKey('batch-evaluate'));
+      } else {
+        this.cache.clear();
+      }
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -275,11 +302,11 @@ export class FeatureFlagsClient {
    */
   startStreaming(): void {
     this.assertNotDisposed();
-    if (!this.streamClient) {
-      this.logger.warn('Streaming was not configured. Use startStreaming(config) to enable it.');
+    if (!this.streamingConfig) {
+      this.logger.warn('Streaming was not configured. Pass streaming: true in client config.');
       return;
     }
-    this.streamClient.connect();
+    this.ensureStreaming().catch(e => this.logger.error('Failed to initialize streaming', e));
   }
 
   /**
@@ -298,12 +325,9 @@ export class FeatureFlagsClient {
     const doc = await this.fetchWithResiliency(async () => {
       return await this.request<FlagDocument>('/feature-flags/document');
     });
-    
-    if (this.edgeEvaluator) {
-      this.edgeEvaluator.updateDocument(doc);
-    } else {
-      this.edgeEvaluator = new EdgeEvaluator(doc, this.fallbackDefaults);
-    }
+
+    const evaluator = await this.getEdgeEvaluator();
+    evaluator.updateDocument(doc);
     this.logger.info('Edge document loaded. Client is now in offline evaluation mode.');
   }
 
@@ -371,9 +395,10 @@ export class FeatureFlagsClient {
    *
    * Resolution order:
    * 1. Local overrides (dev/testing)
-   * 2. Cache hit
-   * 3. Remote API call
-   * 4. Fallback defaults
+   * 2. Edge evaluation (if edgeDocument configured)
+   * 3. Cache hit
+   * 4. Remote API call
+   * 5. Fallback defaults
    */
   async evaluateFlag<T extends FlagValue>(
     slug: string,
@@ -391,9 +416,10 @@ export class FeatureFlagsClient {
       return value;
     }
 
-    // 2. Edge Evaluation (zero HTTP, done purely in memory)
-    if (this.edgeEvaluator) {
-      const { value, reason } = this.edgeEvaluator.evaluate<T>(slug, context || {}, this.localOverrides);
+    // 2. Edge Evaluation (zero HTTP, done purely in memory) - LAZY
+    if (this.edgeDocumentConfig || this.edgeEvaluator) {
+      const evaluator = await this.getEdgeEvaluator();
+      const { value, reason } = evaluator.evaluate(slug, context || {}, this.localOverrides) as { value: T; reason: string };
       this.detectChange(slug, value);
       this.emitEvaluated(slug, value, reason, start);
       return value as unknown as T;
@@ -457,9 +483,10 @@ export class FeatureFlagsClient {
   async evaluateAllFlags(context?: EvaluationContext): Promise<Record<string, FlagValue>> {
     this.assertNotDisposed();
 
-    // 1. Edge Evaluation Batch
-    if (this.edgeEvaluator) {
-      return this.edgeEvaluator.evaluateAll(context || {}, this.localOverrides);
+    // 1. Edge Evaluation Batch - LAZY
+    if (this.edgeDocumentConfig || this.edgeEvaluator) {
+      const evaluator = await this.getEdgeEvaluator();
+      return evaluator.evaluateAll(context || {}, this.localOverrides);
     }
 
     // 2. Remote Evaluation
@@ -763,15 +790,21 @@ export class FeatureFlagsClient {
    * Includes per-flag evaluation counts, cache hit rates, latency percentiles,
    * and experiment exposure counts.
    */
-  getImpactMetrics(): MetricsSnapshot {
-    return this.metrics.getSnapshot();
+  async getImpactMetrics(): Promise<MetricsSnapshot | null> {
+    if (!this.metrics) {
+      return null;
+    }
+    const m = await this.getMetrics();
+    return m.getSnapshot() as MetricsSnapshot;
   }
 
   /**
    * Reset all collected impact metrics counters.
    */
-  resetMetrics(): void {
-    this.metrics.reset();
+  async resetMetrics(): Promise<void> {
+    if (!this.metrics) return;
+    const m = await this.getMetrics();
+    m.reset();
   }
 
   /**
@@ -781,7 +814,7 @@ export class FeatureFlagsClient {
   dispose(): void {
     this.disposed = true;
     this.cache.destroy();
-    this.metrics.destroy();
+    this.metrics?.destroy();
     this.streamClient?.dispose();
     this.events.removeAllListeners();
     this.previousValues.clear();

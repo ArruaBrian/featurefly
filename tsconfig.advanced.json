@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/cjs/advanced",
+    "declaration": true,
+    "declarationDir": "./dist/cjs/advanced"
+  },
+  "include": [
+    "src/advanced/index.ts",
+    "src/shared/edge-evaluator.ts",
+    "src/shared/streaming.ts",
+    "src/shared/sse-client.ts",
+    "src/shared/targeting.ts",
+    "src/shared/rollout.ts",
+    "src/shared/experiment.ts",
+    "src/shared/metrics.ts",
+    "src/shared/types.ts",
+    "src/shared/utils.ts"
+  ],
+  "exclude": ["**/*.spec.ts", "**/*.test.ts", "**/__tests__/**"]
+}

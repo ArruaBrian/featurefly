@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Tree-shakeable entry points**: New package structure with granular imports for better tree-shaking. Import from `featurefly/core` for vanilla JS/Node.js (~8KB), `featurefly/react` for React, or `featurefly/vue` for Vue. Main `featurefly` entry re-exports everything with `React`/`Vue` suffixes for disambiguation.
+- **`featurefly/advanced`**: New entry point for EdgeEvaluator, FlagStreamClient, ImpactMetrics, targeting, rollout, and experiment modules.
 
 ### Changed
 - **Breaking naming**: React hooks (`useFeatureFlag`, `useAllFlags`) are exported as `useFeatureFlagReact`/`useAllFlagsReact` from main entry. Use `featurefly/react` for unchanged names.
+- **Lazy loading**: EdgeEvaluator, FlagStreamClient, and ImpactMetrics are now loaded on-demand via dynamic imports, reducing initial bundle size.
 
 ## [0.3.1] - 2026-04-15
 

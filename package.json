@@ -14,8 +14,8 @@
   "sideEffects": false,
   "scripts": {
     "build": "npm run clean && npm run build:cjs && npm run build:esm",
-    "build:cjs": "tsc -p tsconfig.core.json && tsc -p tsconfig.react.json && tsc -p tsconfig.vue.json && tsc -p tsconfig.json",
-    "build:esm": "tsc -p tsconfig.core.esm.json && tsc -p tsconfig.react.esm.json && tsc -p tsconfig.vue.esm.json && tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.core.json && tsc -p tsconfig.react.json && tsc -p tsconfig.vue.json && tsc -p tsconfig.advanced.json && tsc -p tsconfig.json",
+    "build:esm": "tsc -p tsconfig.core.esm.json && tsc -p tsconfig.react.esm.json && tsc -p tsconfig.vue.esm.json && tsc -p tsconfig.advanced.esm.json && tsc -p tsconfig.esm.json",
     "dev": "tsc --watch",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
@@ -121,6 +121,16 @@
       "require": {
         "types": "./dist/cjs/vue/index.d.ts",
         "default": "./dist/cjs/vue/index.js"
+      }
+    },
+    "./advanced": {
+      "import": {
+        "types": "./dist/esm/advanced/index.d.ts",
+        "default": "./dist/esm/advanced/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/advanced/index.d.ts",
+        "default": "./dist/cjs/advanced/index.js"
       }
     }
   },
